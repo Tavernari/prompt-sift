@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+.prompt-sift/cache/
+.prompt-sift/metrics.jsonl
+coverage/
+*.log

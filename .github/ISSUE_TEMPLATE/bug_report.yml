@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a reproducible problem in PromptSift.
+title: "bug: "
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials, private source code, or security vulnerabilities.
+  - type: input
+    id: version
+    attributes:
+      label: PromptSift version or commit
+      placeholder: 0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Cursor
+        - GitHub Copilot CLI
+        - GitHub Copilot cloud agent
+        - Worker transport
+        - Direct CLI usage
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Node.js version, worker type, and relevant non-secret configuration.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide safe sample files and exact commands or hook payloads.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed credentials and proprietary source from this report.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

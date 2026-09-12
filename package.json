@@ -1,0 +1,48 @@
+{
+  "name": "prompt-sift",
+  "version": "0.1.0",
+  "description": "Keep expensive coding agents focused by routing bulk context work to a smaller model.",
+  "type": "module",
+  "bin": {
+    "prompt-sift": "bin/prompt-sift.js"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./hook": "./src/core/hook.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "scripts",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "test:e2e": "node --test test/e2e.test.js",
+    "check": "node --check bin/prompt-sift.js && node --check src/cli.js && node --test",
+    "benchmark": "node scripts/benchmark.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "cursor",
+    "github-copilot",
+    "llm",
+    "token-optimization"
+  ],
+  "license": "MIT",
+  "author": "Victor Carvalho Tavernari",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tavernari/prompt-sift.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Tavernari/prompt-sift/issues"
+  },
+  "homepage": "https://github.com/Tavernari/prompt-sift#readme"
+}
