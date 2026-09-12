@@ -31,10 +31,15 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm pack --dry-run
+      - name: Verify automatic jq installation from official release
+        if: matrix.node == 22
+        run: node --test test/bootstrap.test.js
+        env:
+          PROMPT_SIFT_LIVE_BOOTSTRAP: '1'
 
-  plugins-windows:
-    name: Plugin hooks on Windows
-    runs-on: windows-latest
+  plugins-macos:
+    name: Plugin hooks on macOS
+    runs-on: macos-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,16 +48,18 @@ jobs:
           node-version: 22
       - run: npm run check:plugins
       - run: npm run test:plugins
+        env:
+          PROMPT_SIFT_LIVE_BOOTSTRAP: '1'
 
   required:
     name: Required checks
     if: ${{ always() }}
-    needs: [test, plugins-windows]
+    needs: [test, plugins-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Verify matrix result
         env:
           TEST_RESULT: ${{ needs.test.result }}
-          PLUGIN_RESULT: ${{ needs.plugins-windows.result }}
+          PLUGIN_RESULT: ${{ needs.plugins-macos.result }}
         run: test "$TEST_RESULT" = "success" && test "$PLUGIN_RESULT" = "success"

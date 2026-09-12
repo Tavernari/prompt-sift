@@ -11,7 +11,7 @@ Thank you for helping improve PromptSift. Small, focused pull requests are easie
 
 ## Development setup
 
-Requirements: Node.js 22, 24, or 26 and npm using the committed lockfile.
+Requirements: Node.js 22, 24, or 26 and npm using the committed lockfile; jq and POSIX shell utilities for plugin tests on macOS/Linux. Plugin end users do not need Node.js.
 
 ```bash
 git clone https://github.com/Tavernari/prompt-sift.git

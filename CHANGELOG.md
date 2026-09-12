@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Automatically install missing jq into a user cache with pinned version and SHA-256 verification, without sudo; reuse verified binaries and fail open on download errors.
+
+- Replace bundled Node plugin hooks with POSIX shell, jq and awk for macOS/Linux.
+- Remove copied JavaScript runtimes and Windows PowerShell plugin launchers.
+- Run plugin CI on macOS and Linux, including enforcement with Node absent from PATH.
+- Preserve native schemas, bounded reads, thresholds, safe quoting and fail-open behavior.
+
 ## 0.2.0
 
 - Recognize Copilot view_range and JSON-encoded tool arguments so bounded native worker reads are allowed.

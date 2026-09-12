@@ -36,10 +36,6 @@ for (const host of ['cursor', 'copilot', 'claude']) {
       delete env.PROMPT_SIFT_BIN;
       // Model plugin-root substitution is performed by the real host before spawning.
       const command = (commandOverride ?? hook.bash ?? hook.command).replaceAll('${' + variable + '}', cache);
-      if (process.platform === 'win32') {
-        if (host !== 'copilot') return spawnSync(process.execPath, [path.join(cache, 'runtime/hook.cjs'), host], { cwd: cache, input, encoding: 'utf8', env });
-        return spawnSync('pwsh', ['-NoProfile', '-Command', hook.powershell.replaceAll('${' + variable + '}', cache)], { cwd: cache, input, encoding: 'utf8', env });
-      }
       return spawnSync('/bin/sh', ['-c', command], { cwd: cache, input, encoding: 'utf8', env });
     };
     const denied = resultOf(run(JSON.stringify(payload)));
@@ -59,16 +55,23 @@ for (const host of ['cursor', 'copilot', 'claude']) {
     assert.equal(decision(allowed), host === 'claude' ? undefined : 'allow');
     const malformed = resultOf(run('invalid JSON'));
     assert.equal(decision(malformed), host === 'claude' ? undefined : 'allow');
-    if (process.platform !== 'win32') {
-      const noNode = run(JSON.stringify(payload), { PATH: '/nonexistent' });
-      assert.equal(decision(resultOf(noNode)), host === 'claude' ? undefined : 'allow');
-      assert.match(noNode.stderr, /Node unavailable/);
+    const noJq = run(JSON.stringify(payload), { PATH: '/nonexistent' });
+    assert.equal(decision(resultOf(noJq)), host === 'claude' ? undefined : 'allow');
+    assert.match(noJq.stderr, /unavailable/);
+    const bin = path.join(temp, 'only shell utilities');
+    await fs.mkdir(bin);
+    for (const utility of ['jq', 'awk', 'wc', 'head', 'dirname']) {
+      const executable = spawnSync('/bin/sh', ['-c', `command -v ${utility}`], { encoding: 'utf8' }).stdout.trim();
+      await fs.symlink(executable, path.join(bin, utility));
     }
+    assert.equal(decision(resultOf(run(JSON.stringify({ ...payload,
+      ...(host === 'copilot' ? { toolArgs: { path: 'large file.js' } } : { tool_input: { file_path: 'large file.js' } })
+    }), { PATH: bin }))), 'deny');
     await fs.writeFile(path.join(project, '.prompt-sift.json'), 'invalid');
     assert.equal(decision(resultOf(run(JSON.stringify(payload)))), host === 'claude' ? undefined : 'allow');
     await fs.unlink(path.join(project, '.prompt-sift.json'));
     // A missing packaged import must not turn a preToolUse hook into a deny.
-    await fs.unlink(path.join(cache, 'runtime/src/core/policy.js'));
+    await fs.unlink(path.join(cache, 'runtime/hook.sh'));
     assert.equal(decision(resultOf(run(JSON.stringify(payload)))), host === 'claude' ? undefined : 'allow');
     assert.deepEqual(await fs.readdir(project), before);
     assert.equal(await fs.access(path.join(cache, 'node_modules')).then(() => true, () => false), false);

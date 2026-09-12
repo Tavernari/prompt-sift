@@ -3,9 +3,9 @@
   "hooks": {
     "preToolUse": [
       {
-        "command": "if command -v node >/dev/null 2>&1; then node \"${CURSOR_PLUGIN_ROOT}/runtime/hook.cjs\" cursor || printf '%s\\n' '{\"permission\":\"allow\"}'; else printf '%s\\n' 'PromptSift: Node unavailable; native agents remain active, read enforcement is inactive.' >&2; printf '%s\\n' '{\"permission\":\"allow\"}'; fi",
+        "command": "/bin/sh \"${CURSOR_PLUGIN_ROOT}/runtime/hook.sh\" cursor || printf '%s\\n' '{\"permission\":\"allow\"}'",
         "matcher": "Read|Shell",
-        "timeout": 5,
+        "timeout": 20,
         "failClosed": false
       }
     ]

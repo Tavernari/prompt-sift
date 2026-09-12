@@ -55,7 +55,11 @@ Agents are discovered by the host and may appear with a `prompt-sift:` prefix. D
 
 Native agents use your host's authentication and model access. Copilot declares the model as required. Cursor and Claude Code can substitute unavailable models according to host policy; check the model shown in your session.
 
-**Runtime boundary:** native agents need only the host. Automatic read enforcement uses an existing Node.js runtime; if Node is missing, hooks report that enforcement is inactive and allow normal work. The plugin does not download runtimes. Cursor and Claude shell launchers target macOS/Linux or a compatible shell; Copilot additionally includes a PowerShell launcher for Windows.
+**Runtime boundary:** plugin hooks target macOS/Linux and use `/bin/sh`, `jq`, `awk`, and standard system utilities. No Node.js or npm is used by the plugins. If `jq` is missing, the hook automatically downloads the pinned jq 1.8.2 binary for x64/ARM64, verifies its SHA-256 before execution, and caches it under `$XDG_CACHE_HOME/prompt-sift/` (or `~/Library/Caches/prompt-sift/` on macOS, `~/.cache/prompt-sift/` on Linux). This uses `curl` and a system SHA-256 utility, with no sudo or global package installation. First use may take up to 12 seconds for the download; later hooks reuse the verified cache.
+
+Set `PROMPT_SIFT_AUTO_INSTALL=0` for offline/system-jq-only operation. If download, integrity verification or runtime startup fails, the hook warns and allows normal work; native subagents remain available. Downloads come only from the [official jq 1.8.2 release](https://github.com/jqlang/jq/releases/tag/jq-1.8.2). Windows is out of scope for now. Node.js remains a development/test dependency and is used by the optional external API CLI.
+
+The shell recognizer supports quoted paths, chained direct readers, head/tail windows, pipes and redirects. It never executes the command it inspects. Shell expansion, dynamic working-directory changes and control characters in paths are not fully modeled; unsupported inputs fail open. This is a context optimization policy, not a security boundary.
 
 Installation references: [Cursor marketplaces](https://cursor.com/docs/plugins), [Copilot plugins](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/plugins-finding-installing), [Claude Code plugins](https://code.claude.com/docs/en/discover-plugins).
 

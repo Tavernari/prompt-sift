@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if command -v node >/dev/null 2>&1; then node \"${CLAUDE_PLUGIN_ROOT}/runtime/hook.cjs\" claude || printf '%s\\n' '{}'; else printf '%s\\n' 'PromptSift: Node unavailable; native agents remain active, read enforcement is inactive.' >&2; printf '%s\\n' '{}'; fi",
-            "timeout": 5
+            "command": "/bin/sh \"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" claude || printf '%s\\n' '{}'",
+            "timeout": 20
           }
         ]
       }

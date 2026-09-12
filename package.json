@@ -1,6 +1,6 @@
 {
   "name": "prompt-sift",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Keep expensive coding agents focused by routing bulk context work to a smaller model.",
   "type": "module",
   "bin": {
@@ -25,7 +25,7 @@
     "benchmark": "node scripts/benchmark.js",
     "build:plugins": "node scripts/build-plugins.js",
     "check:plugins": "node scripts/build-plugins.js --check",
-    "test:plugins": "node --test test/plugins.test.js"
+    "test:plugins": "node --test test/plugins.test.js test/shell-plugin.test.js test/bootstrap.test.js"
   },
   "engines": {
     "node": ">=22"
