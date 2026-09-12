@@ -18,19 +18,23 @@ export async function pluginFiles(root = repo) {
     const manifest = { name: 'prompt-sift', version,
       description: 'Save primary context with native model-pinned subagents and bounded-read hooks.',
       author: { name: 'Victor Carvalho Tavernari' }, license: 'MIT',
-      repository: 'https://github.com/Tavernari/prompt-sift', agents: './agents/', hooks: './hooks/hooks.json' };
+      repository: 'https://github.com/Tavernari/prompt-sift', agents: './agents/', skills: './skills/', hooks: './hooks/hooks.json' };
     // Claude auto-discovers these directories; explicitly listing the default hooks duplicates loading.
-    if (host === 'claude') { delete manifest.agents; delete manifest.hooks; }
+    if (host === 'claude') { delete manifest.agents; delete manifest.hooks; delete manifest.skills; }
     const manifestPath = host === 'cursor' ? '.cursor-plugin/plugin.json'
       : host === 'copilot' ? '.github/plugin/plugin.json' : '.claude-plugin/plugin.json';
     put(manifestPath, json(manifest));
 
     put('LICENSE', license);
     for (const name of runtimeFiles) put(`runtime/${name}`, await fs.readFile(path.join(root, 'scripts/plugin', name), 'utf8'));
-    for (const role of ['primary', 'worker']) {
+    for (const role of ['primary', 'worker', 'writer']) {
       put(`agents/prompt-sift-${host}-${role}${host === 'copilot' ? '.agent' : ''}.md`,
         await fs.readFile(path.join(root, 'templates/agents', `${host}-${role}.md`), 'utf8'));
     }
+    for (const skill of ['bulk-reader', 'code-writer']) {
+      put(`skills/${skill}/SKILL.md`, (await fs.readFile(path.join(root, 'templates/skills', skill, 'SKILL.md'), 'utf8')).replaceAll('{{HOST}}', host));
+    }
+    put('skills/code-writer/scripts/write-file.sh', await fs.readFile(path.join(root, 'templates/skills/code-writer/scripts/write-file.sh'), 'utf8'));
     const rootVariable = host === 'cursor' ? 'CURSOR_PLUGIN_ROOT' : host === 'copilot' ? 'PLUGIN_ROOT' : 'CLAUDE_PLUGIN_ROOT';
     const script = '${' + rootVariable + '}/runtime/hook.sh';
     const neutral = host === 'cursor' ? '{"permission":"allow"}'
@@ -43,12 +47,12 @@ export async function pluginFiles(root = repo) {
       hooks = { hooks: { PreToolUse: [{ matcher: 'Read|Bash', hooks: [{ type: 'command', command, timeout: 20 }] }] } };
     } else if (host === 'cursor') {
       hooks = { version: 1, hooks: { preToolUse: [{ command, matcher: 'Read|Shell', timeout: 20, failClosed: false }] } };
-      put('rules/routing.mdc', '---\ndescription: Route context-heavy work to PromptSift native agents\nalwaysApply: true\n---\nUse the installed prompt-sift worker for bounded file orientation, returning a concise summary with source references. Use the primary specialist for complex reasoning. Match the agent definitions by name in the host tool list; do not call an external CLI or API. Respect hooks and never delegate recursively.\n');
+      put('rules/routing.mdc', '---\ndescription: Route context-heavy work to PromptSift native agents\nalwaysApply: true\n---\nUse the installed prompt-sift worker for bounded file orientation, returning a concise summary with source references. Use the code-writer skill and writer for predictable generation from an existing reference, and the primary specialist for complex reasoning and final diff review. Match the agent definitions by name in the host tool list; do not call an external CLI or API. Respect hooks and never delegate recursively.\n');
     } else {
       hooks = { version: 1, hooks: { preToolUse: [{ type: 'command', bash: command, matcher: 'view|bash', timeoutSec: 20 }] } };
     }
     put('hooks/hooks.json', json(hooks));
-    put('README.md', `# PromptSift for ${host}\n\nInstall this bundle using your host's plugin manager. It includes model-pinned native agents and the hook runtime. No npm install, init command, extra API key, or project writes are needed.\n\nThe host discovers agents automatically. Use the worker for file orientation and the primary specialist for complex reasoning. The host may prefix agent names with the plugin name; select the corresponding discovered agent.\n\nHooks target macOS and Linux, using /bin/sh, jq, awk and standard system utilities. Node.js is not used. If jq is missing, the hook automatically downloads jq 1.8.2 for macOS/Linux x64 or ARM64 to a user cache and verifies its pinned SHA-256 before execution. No sudo or package manager is used. A network or integrity failure leaves native agents active and reports that read enforcement is inactive. Set PROMPT_SIFT_AUTO_INSTALL=0 to disable downloads. Host permissions and model availability still apply.\n\nThis directory is self-contained and may be copied into a plugin cache without the rest of the repository.\n`);
+    put('README.md', `# PromptSift for ${host}\n\nInstall this bundle using your host's plugin manager. It includes model-pinned native agents and the hook runtime. No npm install, init command, extra API key, or project writes are needed.\n\nThe host discovers agents and the bulk-reader and code-writer skills automatically. Use the worker for file orientation the writer for reference-based generation, and the primary specialist for complex reasoning and final review. The host may prefix agent names with the plugin name; select the corresponding discovered agent.\n\nHooks target macOS and Linux, using /bin/sh, jq, awk and standard system utilities. Node.js is not used. If jq is missing, the hook automatically downloads jq 1.8.2 for macOS/Linux x64 or ARM64 to a user cache and verifies its pinned SHA-256 before execution. No sudo or package manager is used. A network or integrity failure leaves native agents active and reports that read enforcement is inactive. Set PROMPT_SIFT_AUTO_INSTALL=0 to disable downloads. Host permissions and model availability still apply.\n\nThis directory is self-contained and may be copied into a plugin cache without the rest of the repository.\n`);
     const marketplace = { name: 'prompt-sift', owner: { name: 'Victor Carvalho Tavernari' }, plugins: [
       { name: 'prompt-sift', source: `./plugins/${host}`, version, description: manifest.description }
     ] };

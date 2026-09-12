@@ -243,3 +243,16 @@ Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before openin
 ## License
 
 MIT
+
+## Native bulk-reader and code-writer
+
+All three plugin bundles include discoverable `bulk-reader` and `code-writer` skills. No additional setup or external API key is needed. Select the installed skill by its host-displayed name, or ask the agent to use it:
+
+- “Use bulk-reader to find which files own session refresh. Return paths and relevant line ranges.”
+- “Use code-writer to create test/user.test.js following test/order.test.js, covering empty input and duplicates.”
+
+The bulk-reader delegates bounded source inspection to the read-only worker. The code-writer delegates predictable generation to a separate native writer: Luna/xhigh on Cursor and Copilot CLI, Sonnet/high on Claude Code. The primary specialist retains Sol/high or Opus/high and reviews the generated file and relevant tests.
+
+The writer requires a specification, existing reference and target. It streams generated code into a bundled POSIX shell helper and returns a short summary instead of the code. The helper rejects missing/empty references, empty output, symlink targets and existing files unless replacement is explicitly requested with `--force`. Destination directories must exist. Output is staged beside the target before publication; files are created with private permissions. This helper has no Node, jq or network dependency.
+
+The helper guards its own writes; agent instructions and host permissions govern other shell operations. It is not a sandbox against a malicious process changing destination directories concurrently. Native model execution still depends on host access and model availability. CI exercises isolated plugin bundles, discovery contracts and script behavior on Linux/macOS; it does not run authenticated model sessions or establish a token-savings percentage. Cache and token metrics currently belong to the optional external CLI mode.

@@ -208,8 +208,16 @@ export async function installCommand(options) {
     written.push(path.relative(root, target));
   }
   for (const host of hosts) {
+    const skillRoot = host === "cursor" ? ".cursor/skills" : host === "copilot" ? ".github/skills" : ".claude/skills";
+    for (const skill of ["bulk-reader", "code-writer"]) {
+      const content = (await fs.readFile(new URL(`../../templates/skills/${skill}/SKILL.md`, import.meta.url), "utf8")).replaceAll("{{HOST}}", host);
+      const target = path.join(root, skillRoot, skill, "SKILL.md");
+      if (await writeIfMissing(target, content, options.force)) written.push(path.relative(root, target));
+    }
+    const helper = path.join(root, skillRoot, "code-writer/scripts/write-file.sh");
+    if (await writeIfMissing(helper, await fs.readFile(new URL("../../templates/skills/code-writer/scripts/write-file.sh", import.meta.url), "utf8"), options.force)) written.push(path.relative(root, helper));
     const dir = host === "cursor" ? ".cursor/agents" : host === "copilot" ? ".github/agents" : ".claude/agents";
-    for (const role of ["primary", "worker"]) {
+    for (const role of ["primary", "worker", "writer"]) {
       const content = await fs.readFile(new URL(`../../templates/agents/${host}-${role}.md`, import.meta.url), "utf8");
       const target = path.join(root, dir, `prompt-sift-${host}-${role}${host === "copilot" ? ".agent" : ""}.md`);
       if (await writeIfMissing(target, content, options.force)) written.push(path.relative(root, target));

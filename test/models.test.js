@@ -20,6 +20,17 @@ test('installer creates native model contracts for all hosts and preserves custo
   assert.match(await read('.github/agents/prompt-sift-copilot-worker.agent.md'), /model: gpt-5.6-luna\nreasoningEffort: xhigh\nmodelPolicy: required/);
   assert.match(await read('.claude/agents/prompt-sift-claude-primary.md'), /model: opus/);
   assert.match(await read('.claude/agents/prompt-sift-claude-worker.md'), /model: sonnet/);
+  for (const [host, directory] of [['cursor', '.cursor'], ['copilot', '.github'], ['claude', '.claude']]) {
+    const skill = await read(`${directory}/skills/code-writer/SKILL.md`);
+    assert.ok(skill.includes(`prompt-sift-${host}-writer`));
+    const helper = path.join(root, directory, 'skills/code-writer/scripts/write-file.sh');
+    const reference = path.join(root, `${host}-reference.js`);
+    await fs.writeFile(reference, 'reference');
+    const generated = path.join(root, `${host}-generated.js`);
+    const result = spawnSync('/bin/sh', [helper, '--reference', reference, '--target', generated], { input: 'generated', encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(await fs.readFile(generated, 'utf8'), 'generated');
+  }
   const settings = JSON.parse(await read('.claude/settings.json'));
   assert.equal(settings.model, 'opus');
   assert.equal(settings.hooks.PreToolUse[0].hooks[0].command, 'node .prompt-sift/run-hook.cjs claude');

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Add native code-writer agents for Cursor, Copilot CLI and Claude Code.
+- Bundle explicit bulk-reader and code-writer skills with plugins and the optional installer.
+- Require a reference and guard generated output with a dependency-free shell writer.
+- Exercise writer failures, overwrite protection and isolated plugin execution in Linux/macOS CI.
+
 ## 0.3.0
 
 - Automatically install missing jq into a user cache with pinned version and SHA-256 verification, without sudo; reuse verified binaries and fail open on download errors.

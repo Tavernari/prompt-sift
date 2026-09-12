@@ -90,10 +90,10 @@ test('marketplaces resolve self-contained bundles with native model contracts', 
     assert.equal(plugin.name, market.plugins[0].name);
     assert.equal(plugin.version, market.plugins[0].version);
     assert.equal(plugin.license, 'MIT');
-    assert.ok((await fs.readdir(path.join(pluginRoot, 'agents'))).length === 2);
+    assert.ok((await fs.readdir(path.join(pluginRoot, 'agents'))).length === 3);
     await fs.access(path.join(pluginRoot, plugin.hooks ?? 'hooks/hooks.json'));
     const suffix = host === 'copilot' ? '.agent.md' : '.md';
-    for (const role of ['primary', 'worker']) {
+    for (const role of ['primary', 'worker', 'writer']) {
       const agent = await fs.readFile(path.join(pluginRoot, `agents/prompt-sift-${host}-${role}${suffix}`), 'utf8');
       assert.equal(agent, await fs.readFile(path.join(root, `templates/agents/${host}-${role}.md`), 'utf8'));
     }
