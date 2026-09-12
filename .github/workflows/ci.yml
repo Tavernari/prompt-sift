@@ -32,14 +32,27 @@ jobs:
       - run: npm run check
       - run: npm pack --dry-run
 
+  plugins-windows:
+    name: Plugin hooks on Windows
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - run: npm run check:plugins
+      - run: npm run test:plugins
+
   required:
     name: Required checks
     if: ${{ always() }}
-    needs: test
+    needs: [test, plugins-windows]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Verify matrix result
         env:
           TEST_RESULT: ${{ needs.test.result }}
-        run: test "$TEST_RESULT" = "success"
+          PLUGIN_RESULT: ${{ needs.plugins-windows.result }}
+        run: test "$TEST_RESULT" = "success" && test "$PLUGIN_RESULT" = "success"

@@ -1,0 +1,10 @@
+{
+  "name": "prompt-sift",
+  "version": "0.2.0",
+  "description": "Save primary context with native model-pinned subagents and bounded-read hooks.",
+  "author": {
+    "name": "Victor Carvalho Tavernari"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/Tavernari/prompt-sift"
+}

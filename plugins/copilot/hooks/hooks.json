@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "if command -v node >/dev/null 2>&1; then node \"${PLUGIN_ROOT}/runtime/hook.cjs\" copilot || printf '%s\\n' '{\"permissionDecision\":\"allow\"}'; else printf '%s\\n' 'PromptSift: Node unavailable; native agents remain active, read enforcement is inactive.' >&2; printf '%s\\n' '{\"permissionDecision\":\"allow\"}'; fi",
+        "powershell": "try { if (Get-Command node -ErrorAction SilentlyContinue) { & node \"${PLUGIN_ROOT}/runtime/hook.cjs\" copilot; if ($LASTEXITCODE -ne 0) { Write-Output '{\"permissionDecision\":\"allow\"}' } } else { [Console]::Error.WriteLine('PromptSift: Node unavailable; native agents remain active, read enforcement is inactive.'); Write-Output '{\"permissionDecision\":\"allow\"}' } } catch { Write-Output '{\"permissionDecision\":\"allow\"}' }; exit 0",
+        "matcher": "view|bash|powershell",
+        "timeoutSec": 5
+      }
+    ]
+  }
+}

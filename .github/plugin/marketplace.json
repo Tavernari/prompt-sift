@@ -1,0 +1,14 @@
+{
+  "name": "prompt-sift",
+  "owner": {
+    "name": "Victor Carvalho Tavernari"
+  },
+  "plugins": [
+    {
+      "name": "prompt-sift",
+      "source": "./plugins/copilot",
+      "version": "0.2.0",
+      "description": "Save primary context with native model-pinned subagents and bounded-read hooks."
+    }
+  ]
+}

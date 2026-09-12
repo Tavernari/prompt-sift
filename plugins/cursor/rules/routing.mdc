@@ -1,0 +1,5 @@
+---
+description: Route context-heavy work to PromptSift native agents
+alwaysApply: true
+---
+Use the installed prompt-sift worker for bounded file orientation, returning a concise summary with source references. Use the primary specialist for complex reasoning. Match the agent definitions by name in the host tool list; do not call an external CLI or API. Respect hooks and never delegate recursively.

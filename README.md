@@ -21,41 +21,56 @@ A cheap model alone does not save primary-agent context. The routing boundary mu
 - Explicit exclusions for work that needs strong reasoning.
 - Local JSONL metrics so savings can be measured instead of assumed.
 
-## Quick start
+## Install through plugins
 
-Prerequisite: Node.js 22 or newer.
+Use your host's plugin manager. The plugin contains the agents, defaults, hooks and hook runtime; no `npm install`, `prompt-sift install`, API key or project configuration is needed for native mode.
 
-Install directly from GitHub:
+**GitHub Copilot CLI** — register the repository once, then install:
 
-```bash
-npm install --save-dev github:Tavernari/prompt-sift
-npx prompt-sift install --host cursor,copilot
+```text
+/plugin marketplace add Tavernari/prompt-sift
+/plugin install prompt-sift@prompt-sift
 ```
 
-The installer creates native agents with these defaults:
+**Claude Code** — use the same commands inside Claude Code:
+
+```text
+/plugin marketplace add Tavernari/prompt-sift
+/plugin install prompt-sift@prompt-sift
+```
+
+Each host discovers its own marketplace manifest and installs its matching bundle.
+
+**Cursor** — import `Tavernari/prompt-sift` under Dashboard → Plugins → Team Marketplaces → Add Marketplace → Import from Repo. Install PromptSift from Customize. The public Cursor catalog requires a separate review; this repository is not yet listed there. On accounts without team marketplace import, this distribution route is not available until public approval.
+
+Any trust confirmation or plugin reload requested by the host is part of its normal install flow. PromptSift has no post-install setup command. Remove the plugin through the same manager; it does not copy files into your project.
 
 | Host | Primary specialist | Orientation worker |
 |---|---|---|
 | Cursor | GPT-5.6 Sol / high | GPT-5.6 Luna / xhigh |
-| GitHub Copilot | GPT-5.6 Sol / high | GPT-5.6 Luna / xhigh |
+| GitHub Copilot CLI | GPT-5.6 Sol / high | GPT-5.6 Luna / xhigh |
 | Claude Code | Opus / high | Sonnet / high |
 
-Delegate to `prompt-sift-<host>-primary` for complex work or `prompt-sift-<host>-worker` for file orientation. The names use `cursor`, `copilot`, or `claude`. These are actual native agent definitions, not model preferences in prose. Native workers use the host's authentication and model access; they do not require a separate OpenAI API key.
+Agents are discovered by the host and may appear with a `prompt-sift:` prefix. Delegate orientation to the worker; use the primary specialist for complex reasoning and final review. Installing a primary specialist does not change an existing parent session. Workers use bounded reads and return concise summaries; they do not recursively delegate or call an external API worker.
+
+Native agents use your host's authentication and model access. Copilot declares the model as required. Cursor and Claude Code can substitute unavailable models according to host policy; check the model shown in your session.
+
+**Runtime boundary:** native agents need only the host. Automatic read enforcement uses an existing Node.js runtime; if Node is missing, hooks report that enforcement is inactive and allow normal work. The plugin does not download runtimes. Cursor and Claude shell launchers target macOS/Linux or a compatible shell; Copilot additionally includes a PowerShell launcher for Windows.
+
+Installation references: [Cursor marketplaces](https://cursor.com/docs/plugins), [Copilot plugins](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/plugins-finding-installing), [Claude Code plugins](https://code.claude.com/docs/en/discover-plugins).
+
+## Optional npm installation
+
+For users who specifically want project-local files or the external API CLI, Node.js 22+ is required:
 
 ```bash
-# Add Claude Code, or install all three hosts:
+npm install --save-dev github:Tavernari/prompt-sift
 npx prompt-sift install --host all
 ```
 
-Restart the active session after installation. Workers search and read bounded ranges, then return a concise summary. This avoids recursive delegation and keeps hooks effective inside subagents too. The primary definition is a callable specialist; installing it does not change an already running parent session. Claude Code also receives an Opus/high project default if no existing value is set.
+Use either plugin mode or project-local hooks for a given host. Existing npm installations should remove only their PromptSift hook entries before switching to plugins to avoid running both copies. Preserve unrelated hooks.
 
-Cursor encodes effort inside the model ID; Copilot uses separate `reasoningEffort` and `modelPolicy: required` fields; Claude Code uses `model` and `effort`. Copilot refuses unavailable required models. Cursor and Claude Code may substitute models according to host policies or account availability: check the host's active model display. Native dispatch and billing require validation in your authenticated host; automated tests cover generated contracts and hook execution.
-
-Sources: [Cursor subagents](https://cursor.com/docs/subagents), [Copilot custom agents](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference), [Claude Code subagents](https://code.claude.com/docs/en/sub-agents).
-
-The direct `read` and `write` CLI commands remain an optional external API mode, using GPT-5.6 Luna/xhigh by default. Set `OPENAI_API_KEY` in that mode. Claude Code's native Sonnet worker is independent of this external API setting.
-
-## What gets installed
+## What npm mode installs
 
 | File | Purpose |
 |---|---|

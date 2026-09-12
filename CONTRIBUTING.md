@@ -54,3 +54,7 @@ Every parser, policy, cache, provider, installer, hook, or CLI fix needs a regre
 At least one approving maintainer review and a green `CI / Required checks` result are recommended before merge. Resolve conversations and update branches that conflict with `main`.
 
 By contributing, you agree that your contribution is licensed under the repository's MIT License.
+
+## Plugin bundles
+
+Edit `src/`, `templates/agents/` and `scripts/plugin/` as the source of truth. Run `npm run build:plugins` and commit the generated `plugins/` bundles and marketplace manifests. `npm run check` rejects stale bundles. `npm run test:plugins` executes hooks from isolated cache directories without npm installation or project configuration. Keep each bundle self-contained; never reference files outside its plugin root.
