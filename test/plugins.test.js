@@ -47,7 +47,14 @@ for (const host of ['cursor', 'copilot', 'claude']) {
     assert.match(JSON.stringify(denied), /prompt-sift.*worker/);
     assert.doesNotMatch(JSON.stringify(denied), /prompt-sift read/);
     const args = host === 'copilot' ? payload.toolArgs : payload.tool_input;
-    args.limit = 100;
+    if (host === 'copilot') {
+      args.view_range = [1, 100];
+      const serialized = { ...payload, toolArgs: JSON.stringify(args) };
+      assert.equal(decision(resultOf(run(JSON.stringify(serialized)))), 'allow');
+      for (const range of [[1, -1], [1, 500], [100, 1]]) {
+        assert.equal(decision(resultOf(run(JSON.stringify({ ...payload, toolArgs: { ...args, view_range: range } })))), 'deny');
+      }
+    } else args.limit = 100;
     const allowed = resultOf(run(JSON.stringify(payload)));
     assert.equal(decision(allowed), host === 'claude' ? undefined : 'allow');
     const malformed = resultOf(run('invalid JSON'));

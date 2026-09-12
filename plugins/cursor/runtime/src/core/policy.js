@@ -14,10 +14,19 @@ function normalizedTool(payload) {
 }
 
 function normalizedArgs(payload) {
-  return payload.toolArgs ?? payload.tool_input ?? {};
+  const value = payload.toolArgs ?? payload.tool_input ?? {};
+  if (typeof value !== "string") return value ?? {};
+  try { return JSON.parse(value) ?? {}; } catch { return {}; }
 }
 
 function targetedLineCount(args) {
+  if (args.view_range !== undefined) {
+    const range = args.view_range;
+    if (!Array.isArray(range) || range.length !== 2) return null;
+    const [start, end] = range;
+    return Number.isInteger(start) && Number.isInteger(end) && start >= 1 && end >= start
+      ? end - start + 1 : null;
+  }
   const limit = Number(firstDefined(args, ["limit", "line_limit", "lineLimit"]));
   return Number.isFinite(limit) && limit > 0 ? limit : null;
 }

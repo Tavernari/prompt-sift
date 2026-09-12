@@ -2,6 +2,8 @@
 
 ## 0.2.0
 
+- Recognize Copilot view_range and JSON-encoded tool arguments so bounded native worker reads are allowed.
+
 - Ship self-contained plugin bundles and host-specific marketplaces for Cursor, Copilot CLI and Claude Code.
 - Run hooks from plugin cache without npm, external credentials or project initialization.
 - Test isolated plugin copies, missing runtimes, malformed input and packaged-source drift; add Windows PowerShell CI.
@@ -19,6 +21,8 @@ All notable user-visible changes are recorded here.
 The project follows Semantic Versioning once stable releases begin. During `0.x`, minor versions may include breaking changes when clearly documented.
 
 ## 0.2.0
+
+- Recognize Copilot view_range and JSON-encoded tool arguments so bounded native worker reads are allowed.
 
 - Ship self-contained plugin bundles and host-specific marketplaces for Cursor, Copilot CLI and Claude Code.
 - Run hooks from plugin cache without npm, external credentials or project initialization.
