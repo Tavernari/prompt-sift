@@ -1,10 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Install native primary/worker agents for Cursor (Sol/high and Luna/xhigh), Copilot (required models with explicit effort), and Claude Code (Opus/high and Sonnet/high).
+- Add Claude Code hooks with native nested decisions and neutral fail-open output.
+- Guide native workers through bounded reads to avoid recursive hook delegation.
+
+- Default to OpenAI GPT-5.6 Luna with xhigh reasoning for worker requests and record GPT-5.6 Sol/high as the primary-agent preference.
+- Send reasoning parameters and separate cache entries by reasoning settings.
+- Preserve explicit local-worker configurations.
+
 All notable user-visible changes are recorded here.
 
 The project follows Semantic Versioning once stable releases begin. During `0.x`, minor versions may include breaking changes when clearly documented.
 
 ## Unreleased
+
+- Install native primary/worker agents for Cursor (Sol/high and Luna/xhigh), Copilot (required models with explicit effort), and Claude Code (Opus/high and Sonnet/high).
+- Add Claude Code hooks with native nested decisions and neutral fail-open output.
+- Guide native workers through bounded reads to avoid recursive hook delegation.
 
 ### Added
 

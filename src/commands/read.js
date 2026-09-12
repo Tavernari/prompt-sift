@@ -13,6 +13,8 @@ export async function readCommand(config, options) {
     promptVersion: PROMPT_VERSION,
     model: config.provider.model,
     baseUrl: config.provider.baseUrl,
+    reasoningEffort: config.provider.reasoningEffort ?? null,
+    temperature: config.provider.temperature ?? null,
     question: options.question,
     files: files.map((file) => ({ path: path.normalize(file.path), hash: hash(file.text) }))
   };

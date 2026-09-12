@@ -61,6 +61,9 @@ test("read caches identical work and records metrics", async (t) => {
   assert.equal(second.cacheHit, true);
   assert.equal(stub.calls(), 1);
   assert.equal((await readMetrics(config)).length, 2);
+  const changed = { ...config, provider: { ...config.provider, reasoningEffort: "high" } };
+  assert.equal((await readCommand(changed, options)).cacheHit, false);
+  assert.equal(stub.calls(), 2);
 });
 
 test("write waits for a complete response and protects existing targets", async (t) => {

@@ -11,11 +11,11 @@ import { readMetrics, summarizeMetrics } from "./core/metrics.js";
 const HELP = `PromptSift — keep expensive agents focused on reasoning
 
 Usage:
-  prompt-sift install [--host cursor,copilot] [--directory PATH]
+  prompt-sift install [--host cursor,copilot,claude] [--directory PATH]
   prompt-sift read --question TEXT --path FILE [--path FILE ...]
   prompt-sift write --spec TEXT --reference FILE [--target FILE] [--force]
   prompt-sift inspect --path FILE [--path FILE ...]
-  prompt-sift hook --host cursor|copilot
+  prompt-sift hook --host cursor|copilot|claude
   prompt-sift doctor
   prompt-sift stats [--json]
 

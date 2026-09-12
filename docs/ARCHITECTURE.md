@@ -38,7 +38,7 @@ File bodies use content-derived boundary markers and are explicitly declared unt
 
 ### Cache and metrics
 
-Read cache keys contain the prompt version, provider endpoint, model, exact question, normalized paths, and content hashes. A changed file or question cannot reuse a stale answer.
+Read cache keys contain the prompt version, provider endpoint, model, reasoning effort, temperature, exact question, normalized paths, and content hashes. A changed file or question cannot reuse a stale answer.
 
 Metrics are append-only JSONL. They deliberately distinguish primary-context savings from worker usage. When a provider does not report tokens, primary savings remain an estimate based on bytes.
 

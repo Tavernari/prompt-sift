@@ -54,11 +54,12 @@ export async function evaluatePolicy(payload, config) {
   return { allow: true };
 }
 
-export function denialMessage(result) {
+export function denialMessage(result, host) {
   const relative = path.relative(process.cwd(), result.path) || result.path;
   return [
     `PromptSift blocked a broad read of ${relative} (${result.lines} lines, ${result.bytes} bytes).`,
-    `For orientation, run: prompt-sift read --question \"<specific question>\" --path ${JSON.stringify(relative)}`,
+    `Delegate orientation to prompt-sift-${host}-worker; it must use bounded reads of at most the configured maxTargetedLines and return a concise summary. Use prompt-sift-${host}-primary for complex reasoning.`,
+    `For an explicitly requested external API worker, run: prompt-sift read --question \"<specific question>\" --path ${JSON.stringify(relative)}`,
     "For debugging, security, concurrency, architecture, or edits, use search plus a targeted read instead."
   ].join(" ");
 }

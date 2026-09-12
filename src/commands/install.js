@@ -9,7 +9,7 @@ const { spawnSync } = require("node:child_process");
 
 const host = process.argv[2];
 const input = fs.readFileSync(0);
-const allow = host === "cursor"
+const allow = host === "claude" ? {} : host === "cursor"
   ? { permission: "allow" }
   : { permissionDecision: "allow" };
 
@@ -51,7 +51,7 @@ description: Reduce primary-agent context usage by delegating broad file reading
 
 # PromptSift
 
-Use PromptSift for I/O-heavy, low-reasoning work.
+Use the installed native prompt-sift-<host>-worker subagent for file orientation and prompt-sift-<host>-primary for complex reasoning. Each definition pins its own model. Return concise summaries. Workers must use bounded reads to respect hooks; do not delegate recursively. The CLI examples below are an optional external API mode, used only when explicitly requested.
 
 ## Broad reading
 
@@ -76,7 +76,7 @@ const COPILOT_INSTRUCTIONS = `---
 applyTo: "**"
 ---
 
-Use PromptSift for broad, low-reasoning file orientation and predictable reference-based boilerplate. When a read is blocked, follow the hook message. Keep debugging, architecture, security, concurrency, edits, and correctness decisions in the primary agent with search plus targeted reads. Review every generated diff and run relevant tests.
+Delegate file orientation to prompt-sift-copilot-worker (Luna/xhigh) and complex reasoning to prompt-sift-copilot-primary (Sol/high). Return concise summaries. Use the external PromptSift CLI only when explicitly requested. When a read is blocked, follow the hook message. Keep debugging, architecture, security, concurrency, edits, and correctness decisions in the primary agent with search plus targeted reads. Review every generated diff and run relevant tests.
 `;
 
 async function readJson(filePath, fallback) {
@@ -161,9 +161,9 @@ async function updateGitignore(root) {
 
 export async function installCommand(options) {
   const root = path.resolve(options.directory ?? process.cwd());
-  const hosts = options.hosts.includes("all") ? ["cursor", "copilot"] : [...new Set(options.hosts)];
+  const hosts = options.hosts.includes("all") ? ["cursor", "copilot", "claude"] : [...new Set(options.hosts)];
   for (const host of hosts) {
-    if (!new Set(["cursor", "copilot"]).has(host)) {
+    if (!new Set(["cursor", "copilot", "claude"]).has(host)) {
       throw new Error(`Unknown host: ${host}`);
     }
   }
@@ -191,6 +191,39 @@ export async function installCommand(options) {
     }
   }
 
+  if (hosts.includes("claude")) {
+    const target = path.join(root, ".claude", "settings.json");
+    const settings = await readJson(target, {});
+    settings.model ??= "opus";
+    settings.effortLevel ??= "high";
+    settings.hooks ??= {};
+    settings.hooks.PreToolUse ??= [];
+    if (!settings.hooks.PreToolUse.some(group => (group.hooks ?? []).some(hook =>
+        hook.command === "node .prompt-sift/run-hook.cjs claude"))) {
+      settings.hooks.PreToolUse.push({ matcher: "Read|Bash", hooks: [
+        { type: "command", command: "node .prompt-sift/run-hook.cjs claude", timeout: 5 }
+      ] });
+    }
+    await writeJson(target, settings);
+    written.push(path.relative(root, target));
+  }
+  for (const host of hosts) {
+    const dir = host === "cursor" ? ".cursor/agents" : host === "copilot" ? ".github/agents" : ".claude/agents";
+    for (const role of ["primary", "worker"]) {
+      const content = await fs.readFile(new URL(`../../templates/agents/${host}-${role}.md`, import.meta.url), "utf8");
+      const target = path.join(root, dir, `prompt-sift-${host}-${role}${host === "copilot" ? ".agent" : ""}.md`);
+      if (await writeIfMissing(target, content, options.force)) written.push(path.relative(root, target));
+    }
+  }
+  if (hosts.includes("cursor")) {
+    const target = path.join(root, ".cursor/rules/prompt-sift.mdc");
+    if (await writeIfMissing(target, `---
+description: PromptSift native model routing
+alwaysApply: true
+---
+Delegate file orientation to prompt-sift-cursor-worker (Luna/xhigh). Use prompt-sift-cursor-primary (Sol/high) for complex reasoning and final review. Ask workers for concise summaries with source references. Workers must use bounded reads and must not recursively delegate or call the external API worker.
+`, options.force)) written.push(path.relative(root, target));
+  }
   await updateGitignore(root);
   return { root, hosts, written: [...new Set(written)] };
 }

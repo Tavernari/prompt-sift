@@ -10,11 +10,15 @@ export const DEFAULT_CONFIG = Object.freeze({
   cache: true,
   cacheDir: ".prompt-sift/cache",
   metricsFile: ".prompt-sift/metrics.jsonl",
+  primaryAgent: {
+    model: "gpt-5.6-sol",
+    reasoningEffort: "high"
+  },
   provider: {
-    baseUrl: "http://127.0.0.1:11434/v1",
-    model: "qwen2.5-coder:3b",
-    apiKeyEnv: "PROMPT_SIFT_API_KEY",
-    temperature: 0.2
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-5.6-luna",
+    apiKeyEnv: "OPENAI_API_KEY",
+    reasoningEffort: "xhigh"
   }
 });
 
@@ -30,8 +34,11 @@ function mergeConfig(fileConfig = {}) {
   return {
     ...DEFAULT_CONFIG,
     ...fileConfig,
+    primaryAgent: { ...DEFAULT_CONFIG.primaryAgent, ...(fileConfig.primaryAgent ?? {}) },
     provider: {
       ...DEFAULT_CONFIG.provider,
+      ...(fileConfig.provider?.model && fileConfig.provider.model !== DEFAULT_CONFIG.provider.model
+        ? { reasoningEffort: null } : {}),
       ...(fileConfig.provider ?? {})
     }
   };
@@ -70,10 +77,19 @@ export async function loadConfig(cwd = process.cwd(), explicitPath) {
     config.provider.baseUrl = process.env.PROMPT_SIFT_BASE_URL;
   }
   if (process.env.PROMPT_SIFT_MODEL) {
+    if (config.provider.model !== process.env.PROMPT_SIFT_MODEL) config.provider.reasoningEffort = null;
     config.provider.model = process.env.PROMPT_SIFT_MODEL;
   }
   if (process.env.PROMPT_SIFT_TIMEOUT_MS) {
     config.requestTimeoutMs = positiveInteger(process.env.PROMPT_SIFT_TIMEOUT_MS, "PROMPT_SIFT_TIMEOUT_MS");
+  }
+
+  if (process.env.PROMPT_SIFT_REASONING_EFFORT) {
+    config.provider.reasoningEffort = process.env.PROMPT_SIFT_REASONING_EFFORT;
+  }
+  if (config.provider.reasoningEffort != null &&
+      !["none", "low", "medium", "high", "xhigh", "max"].includes(config.provider.reasoningEffort)) {
+    throw new Error("Invalid provider.reasoningEffort");
   }
 
   config.configPath = configPath;

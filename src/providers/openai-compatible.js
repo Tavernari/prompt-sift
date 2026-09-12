@@ -23,7 +23,12 @@ export async function chat(config, { system, user }) {
       headers,
       body: JSON.stringify({
         model: config.provider.model,
-        temperature: config.provider.temperature,
+        ...(config.provider.reasoningEffort != null
+          ? { reasoning_effort: config.provider.reasoningEffort }
+          : {}),
+        ...(config.provider.temperature != null &&
+            (!config.provider.reasoningEffort || config.provider.reasoningEffort === "none")
+          ? { temperature: config.provider.temperature } : {}),
         messages: [
           { role: "system", content: system },
           { role: "user", content: user }

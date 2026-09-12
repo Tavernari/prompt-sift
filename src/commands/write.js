@@ -52,6 +52,8 @@ export async function writeCommand(config, options) {
     promptVersion: PROMPT_VERSION,
     model: config.provider.model,
     baseUrl: config.provider.baseUrl,
+    reasoningEffort: config.provider.reasoningEffort ?? null,
+    temperature: config.provider.temperature ?? null,
     spec: options.spec,
     reference: { path: path.normalize(reference.path), hash: hash(reference.text) }
   };
