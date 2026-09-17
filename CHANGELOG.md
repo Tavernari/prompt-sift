@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.5.0 — 2026-09-17
+## Unreleased
+
+- A worker's shell is read-only where the host says who is calling. Cursor's `subagentStart` hook (`runtime/subagent.sh`) registers PromptSift worker ids; the `preToolUse` hook then classifies a worker's shell command and denies anything that could change the workspace (redirection, heredocs, `tee`, `sed -i`, `patch`, `git` write subcommands, builds, package managers, unknown commands, command substitution) while search and read commands pass. Claude Code carries `agent_type` on every call, so no registry is needed there. Copilot exposes no caller identity: its worker is protected by its `tools` list alone. Refusals are ledger rows (`event: refuse`).
+
 
 - The orientation worker now runs at `low` reasoning effort on every host (Cursor `gpt-5.6-luna[effort=low]`, Copilot `reasoningEffort: low`, Claude Code Sonnet `effort: low`), and the external CLI worker defaults to `low` as well. Search plus a bounded read plus a summary does not need `xhigh`, and at `xhigh` the "cheap" worker could out-cost the parent session. The writer keeps `xhigh`.
 

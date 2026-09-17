@@ -9,6 +9,16 @@ metrics_file() {
   if [ -n "${PROMPT_SIFT_METRICS_FILE-}" ]; then printf '%s' "$PROMPT_SIFT_METRICS_FILE"
   else printf '%s/prompt-sift/metrics.jsonl' "$(cache_root)"; fi
 }
+workers_file() { printf '%s/prompt-sift/workers' "$(cache_root)"; }
+# is_worker <host> <agent_type> <conversation_id>: Claude Code names the subagent on every hook call;
+# Cursor only at subagentStart, so its ids are looked up in the registry subagent.sh keeps.
+is_worker() {
+  case "$2" in "prompt-sift-$1-worker"|"prompt-sift:prompt-sift-$1-worker") return 0 ;; esac
+  [ -n "$3" ] || return 1
+  registry=$(workers_file) || return 1
+  [ -r "$registry" ] || return 1
+  awk -v id="$3" '$0 == id { found = 1; exit } END { exit !found }' "$registry" 2>/dev/null
+}
 # record <event> <host> <cwd> <tool> <bytes> [<ms>]: one JSON line, private permissions, no paths or contents.
 record() {
   [ "${PROMPT_SIFT_TELEMETRY-1}" != 0 ] || return 0

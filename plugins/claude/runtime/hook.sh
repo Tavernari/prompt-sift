@@ -14,6 +14,15 @@ unavailable() {
   allow
 }
 trap 'unavailable' HUP INT TERM
+deny() {
+  result=$(jq -cn --arg host "$host" --arg message "$message" '
+  if $host == "cursor" then {permission:"deny",user_message:$message,agent_message:$message}
+  elif $host == "copilot" then {permissionDecision:"deny",permissionDecisionReason:$message}
+  else {hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$message}} end
+') || unavailable
+  printf '%s\n' "$result"
+  exit 0
+}
 case "$host" in cursor|copilot|claude) ;; *) allow ;; esac
 for utility in awk wc head tr dirname; do
   command -v "$utility" >/dev/null 2>&1 || {
@@ -38,6 +47,7 @@ normalized=$(printf '%s' "$payload" | jq -ce '
    tool: ((.toolName // .tool_name // "") | ascii_downcase),
    path: ($a.path // $a.file_path // $a.filePath // ""),
    command: ($a.command // $a.cmd // $a.script // ""),
+   agent: (.agent_type // ""), conversation: (.conversation_id // ""),
    search: (if $a | has("pattern") then {mode: ($a.output_mode // null), head: ($a.head_limit // null)} else null end),
    limit: (if $a | has("view_range") then
      $a.view_range as $r | if ($r|type) == "array" and ($r|length) == 2 and
@@ -82,6 +92,17 @@ case "$tool" in
     ;;
   shell|bash)
     [ -r "$runtime_dir/shell-paths.awk" ] || unavailable
+    # A PromptSift worker is read-only by contract; where the host says who is calling, the hook
+    # holds its shell to searching and reading. The redirect must be flagged when the worker's
+    # own readonly flag cannot: it stopped the edit tools and the worker reached for the shell.
+    if is_worker "$host" "$(printf '%s' "$normalized" | jq -r '.agent')" "$(printf '%s' "$normalized" | jq -r '.conversation')"; then
+      verdict=$(printf '%s' "$normalized" | jq -r '.command' | awk -v classify=1 -f "$runtime_dir/shell-paths.awk") || unavailable
+      if [ "$verdict" = write ]; then
+        record refuse "$host" "$cwd" "$tool" 0
+        message="PromptSift: prompt-sift-$host-worker is read-only and this shell command would change the workspace. Do not work around it with redirection, heredocs, tee, sed -i, patch or git; return the orientation you already have (paths, symbols, line ranges) to the parent, which makes the edit itself."
+        deny
+      fi
+    fi
     candidates=$(printf '%s' "$normalized" | jq -r '.command' | awk -v max_lines="$max_targeted" -v max_bytes="$max_bytes" -f "$runtime_dir/shell-paths.awk") || unavailable
     file=$(printf '%s\n' "$candidates" | while IFS= read -r entry; do
       [ -n "$entry" ] || continue
@@ -118,10 +139,4 @@ case "$tool" in
   grep|rg) message="PromptSift blocked an unbounded content search of $file. Use output_mode files_with_matches or count, a head_limit of at most $max_targeted, a narrower path, or delegate orientation to prompt-sift:prompt-sift-$host-worker." ;;
   *) message="PromptSift blocked a broad read of $file. Delegate orientation to prompt-sift:prompt-sift-$host-worker; use bounded reads of at most $max_targeted lines and return a concise summary. Use prompt-sift:prompt-sift-$host-primary for complex reasoning. For debugging, security, concurrency, architecture or edits, use search plus a targeted read." ;;
 esac
-result=$(jq -cn --arg host "$host" --arg message "$message" '
-  if $host == "cursor" then {permission:"deny",user_message:$message,agent_message:$message}
-  elif $host == "copilot" then {permissionDecision:"deny",permissionDecisionReason:$message}
-  else {hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$message}} end
-') || unavailable
-printf '%s\n' "$result"
-exit 0
+deny

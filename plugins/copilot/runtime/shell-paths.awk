@@ -50,6 +50,65 @@ function segment(start,end,    i,first,reduced,partstart) {
     }
   }
 }
+# Read-only classification for a worker's shell (classify=1): prints "write" when any part could
+# change the workspace, "read" otherwise. Unknown commands are writes: a worker has no business
+# running them. Command substitution is a write for the same reason.
+function readonly_git(i,end,    s,j) {
+  while(i<=end && token[i] ~ /^-/) { if(token[i]=="-C" || token[i]=="-c") i++; i++ }
+  s=token[i]
+  if(s ~ /^(log|diff|show|status|blame|ls-files|ls-tree|grep|rev-parse|describe|shortlog|cat-file|name-rev|reflog|stash|remote|tag|branch)$/) {
+    for(j=i+1;j<=end;j++) {
+      if(op[j]) continue
+      if(s=="branch" && token[j] !~ /^(-a|-r|-v|-vv|--list|--show-current|--all|--remotes|--contains|--merged|--no-merged)$/) return 0
+      if(s=="remote" && token[j] !~ /^(-v|show)$/) return 0
+      if(s=="tag" && token[j] !~ /^(-l|--list|-n[0-9]*)$/) return 0
+      if(s=="stash" && token[j] !~ /^(list|show)$/) return 0
+      if(s=="reflog" && token[j] !~ /^(show|-)/) return 0
+    }
+    return 1
+  }
+  return 0
+}
+function readonly_command(start,end,    cmd,i,v) {
+  if(start>end) return 1
+  cmd=base(token[start])
+  if(cmd ~ /^(cat|head|tail|less|more|grep|rg|egrep|fgrep|find|ls|tree|wc|awk|sort|uniq|cut|tr|diff|file|stat|du|pwd|echo|printf|which|type|basename|dirname|realpath|readlink|cd|true|test|\[|nl|column|strings|od|xxd|hexdump|date|uname|jq|yq)$/) {
+    if(cmd=="find") for(i=start+1;i<=end;i++) {
+      v=token[i]
+      if(v=="-delete") return 0
+      if(v ~ /^-(exec|execdir|ok|okdir)$/) return readonly_command(i+1,end)
+    }
+    return 1
+  }
+  if(cmd=="sed") { for(i=start+1;i<=end;i++) if(token[i] ~ /^-[a-zA-Z]*i/ || token[i] ~ /^--in-place/) return 0; return 1 }
+  if(cmd=="xargs" || cmd=="env" || cmd=="nice" || cmd=="time" || cmd=="command") {
+    for(i=start+1;i<=end;i++) {
+      v=token[i]
+      if(v ~ /^-(n|I|P|d|L|s|E)$/) { i++; continue }
+      if(v ~ /^-/ || (cmd=="env" && v ~ /=/)) continue
+      return readonly_command(i,end)
+    }
+    return cmd=="env"
+  }
+  if(cmd=="git") return readonly_git(start+1,end)
+  return 0
+}
+function classification(    i,start,partstart,target) {
+  for(i=1;i<=count;i++) {
+    if(!op[i] && (token[i] ~ /\$\(/ || token[i] ~ /`/)) return "write"
+    if(op[i] && redirect(token[i])) { target=token[i+1]; if(target!="/dev/null" && target !~ /^&/) return "write" }
+  }
+  partstart=1
+  for(i=1;i<=count+1;i++) {
+    if(i==count+1 || (op[i] && token[i] ~ /^(;|&&|\|\||\||\|&)$/)) {
+      start=partstart
+      while(start<i && op[start]) start++
+      if(!readonly_command(start,i-1)) return "write"
+      partstart=i+1
+    }
+  }
+  return "read"
+}
 { source=source $0 "\n" }
 END {
   for(i=1;i<=length(source);i++) {
@@ -75,7 +134,9 @@ END {
     word=word c
   }
   if(quote!="" || escaped) exit 0
-  push(); start=1
+  push()
+  if(classify) { print classification(); exit 0 }
+  start=1
   for(i=1;i<=count+1;i++) {
     if(i==count+1 || (op[i] && (token[i]==";" || token[i]=="&&" || token[i]=="||"))) {
       segment(start,i-1); start=i+1
