@@ -1,6 +1,6 @@
 {
   "name": "prompt-sift",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Keep expensive coding agents focused by routing bulk context work to a smaller model.",
   "type": "module",
   "bin": {
