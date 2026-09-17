@@ -19,14 +19,24 @@ is_worker() {
   [ -r "$registry" ] || return 1
   awk -v id="$3" '$0 == id { found = 1; exit } END { exit !found }' "$registry" 2>/dev/null
 }
-# record <event> <host> <cwd> <tool> <bytes> [<ms>]: one JSON line, private permissions, no paths or contents.
+# session_key <host> <id> <cwd>: a stable, opaque per-session key. Hosts that name the session
+# (Cursor conversation_id, Claude Code session_id) get one per session; the rest one per project and day.
+# cksum is POSIX; the raw id is never stored. Without cksum the key is empty and only the
+# per-session tally is lost: enforcement never depends on it.
+session_key() {
+  command -v cksum >/dev/null 2>&1 || return 0
+  seed=$2
+  [ -n "$seed" ] || seed="$3|$(date +%Y-%m-%d 2>/dev/null)"
+  printf '%s|%s' "$1" "$seed" | cksum 2>/dev/null | awk '{ printf "%s", $1 }'
+}
+# record <event> <host> <cwd> <tool> <bytes> [<ms>] [<session>]: one JSON line, private permissions, no paths or contents.
 record() {
   [ "${PROMPT_SIFT_TELEMETRY-1}" != 0 ] || return 0
   ledger=$(metrics_file) || return 0
-  row=$(jq -cn --arg event "$1" --arg host "$2" --arg cwd "$3" --arg tool "$4" --arg bytes "$5" --arg ms "${6-}" '
+  row=$(jq -cn --arg event "$1" --arg host "$2" --arg cwd "$3" --arg tool "$4" --arg bytes "$5" --arg ms "${6-}" --arg session "${7-}" '
     ($bytes | tonumber) as $b |
     {at: (now | todate), host: $host, cwd: $cwd, event: $event, tool: $tool, bytes: $b,
-     tokens: (($b + 3) / 4 | floor), ms: ($ms | if . == "" then null else tonumber end)}
+     tokens: (($b + 3) / 4 | floor), ms: ($ms | if . == "" then null else tonumber end), session: $session}
   ' 2>/dev/null) || return 0
   ( umask 077; mkdir -p -- "$(dirname -- "$ledger")" && printf '%s\n' "$row" >> "$ledger" ) 2>/dev/null || true
 }
@@ -51,4 +61,18 @@ read_limits() {
   min_lines=$1
   max_bytes=$2
   max_targeted=$3
+}
+# nudge_count <session> <tokens>: adds one oversized result to the session's tally and prints
+# "<count> <total tokens>". A tally that cannot be kept reads as the first nudge, never as silence.
+nudge_count() {
+  [ -n "$1" ] || { printf '1 %s' "$2"; return 0; }
+  tally="$(cache_root)/prompt-sift/sessions/$1"
+  count=0; total=0
+  if [ -r "$tally" ]; then
+    read -r count total < "$tally" 2>/dev/null || { count=0; total=0; }
+    case "$count$total" in *[!0-9]*|"") count=0; total=0 ;; esac
+  fi
+  count=$((count + 1)); total=$((total + $2))
+  ( umask 077; mkdir -p -- "$(dirname -- "$tally")" && printf '%s %s\n' "$count" "$total" > "$tally" ) 2>/dev/null || true
+  printf '%s %s' "$count" "$total"
 }

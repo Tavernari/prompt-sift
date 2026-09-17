@@ -111,3 +111,42 @@ test('stats.sh summarises the ledger per tool without any Node dependency', asyn
   assert.equal(empty.status, 0);
   assert.match(empty.stdout, /no .*recorded/i);
 });
+
+// A nag that repeats itself is noise; one that escalates is teaching. The third oversized result
+// in one session names the worker and how to call it, and the count is per session, not global.
+test('the nudge escalates within a session and starts over in the next one', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sift nudge '));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const file = path.join(root, 'metrics.jsonl');
+  const env = { PROMPT_SIFT_METRICS_FILE: file, XDG_CACHE_HOME: path.join(root, 'cache') };
+  const big = 'x'.repeat(80000);
+  const cursor = id => JSON.parse(run(telemetry, 'cursor', { cwd: root, conversation_id: id, tool_name: 'Read', tool_input: {}, tool_output: big }, env).stdout).additional_context;
+  const first = cursor('conv-a');
+  assert.match(first, /PromptSift: that read result was 78\.1 KB/);
+  assert.doesNotMatch(first, /second|third|3rd/i);
+  const second = cursor('conv-a');
+  assert.match(second, /second oversized result/i);
+  assert.match(second, /~40000 tokens/);
+  const third = cursor('conv-a');
+  assert.match(third, /3rd oversized result/i);
+  assert.match(third, /~60000 tokens/);
+  assert.match(third, /prompt-sift-cursor-worker/);
+  assert.match(third, /call it with the question and the paths/i);
+  assert.ok(third.length < 400, third);
+  // Another session starts from the beginning; a session the host does not name is keyed per project and day.
+  assert.match(cursor('conv-b'), /was 78\.1 KB/);
+  const claude = () => JSON.parse(run(telemetry, 'claude', { cwd: root, session_id: 'sess-1', tool_name: 'Bash', tool_input: {}, tool_response: big }, env).stdout).hookSpecificOutput.additionalContext;
+  claude(); claude();
+  assert.match(claude(), /3rd oversized result.*prompt-sift-claude-worker/);
+  const anonymous = () => JSON.parse(run(telemetry, 'copilot', { cwd: root, toolName: 'bash', toolArgs: {}, toolResult: { textResultForLlm: big } }, env).stdout).additionalContext;
+  anonymous();
+  assert.match(anonymous(), /second oversized result/i);
+  // Ledger rows carry the session so stats can group by it; the id is hashed, never stored raw.
+  const stored = await rows(file);
+  assert.ok(stored.every(row => typeof row.session === 'string' && row.session.length > 0 && row.session !== 'conv-a'));
+  assert.equal(new Set(stored.filter(row => row.host === 'cursor').map(row => row.session)).size, 2);
+  // A registry that cannot be written still yields the first-form nudge, never silence.
+  const unwritable = run(telemetry, 'cursor', { cwd: root, conversation_id: 'conv-c', tool_name: 'Read', tool_input: {}, tool_output: big },
+    { ...env, XDG_CACHE_HOME: '/proc/nowhere' });
+  assert.match(JSON.parse(unwritable.stdout).additional_context, /was 78\.1 KB/);
+});

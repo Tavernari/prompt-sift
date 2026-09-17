@@ -48,6 +48,7 @@ normalized=$(printf '%s' "$payload" | jq -ce '
    path: ($a.path // $a.file_path // $a.filePath // ""),
    command: ($a.command // $a.cmd // $a.script // ""),
    agent: (.agent_type // ""), conversation: (.conversation_id // ""),
+   session: ((.conversation_id // .session_id // .sessionId // "") | tostring),
    search: (if $a | has("pattern") then {mode: ($a.output_mode // null), head: ($a.head_limit // null)} else null end),
    limit: (if $a | has("view_range") then
      $a.view_range as $r | if ($r|type) == "array" and ($r|length) == 2 and
@@ -200,7 +201,7 @@ case "$tool" in
   *) allow ;;
 esac
 # Ledger row for the denial: size on disk is what would have entered the context, before any host cap.
-record deny "$host" "$cwd" "$tool" "$(wc -c < "$file" 2>/dev/null || printf 0)"
+record deny "$host" "$cwd" "$tool" "$(wc -c < "$file" 2>/dev/null || printf 0)" "" "$(session_key "$host" "$(printf '%s' "$normalized" | jq -r '.session')" "$cwd")"
 case "$tool:${kind-}" in
   grep:*|rg:*) message="PromptSift blocked an unbounded content search of $file. Use output_mode files_with_matches or count, a head_limit of at most $max_targeted, a narrower path, or delegate orientation to prompt-sift:prompt-sift-$host-worker." ;;
   *:unbounded) message="PromptSift blocked an unbounded dump: $file. Bound it (a count, a path, a pipe into head or grep) or delegate orientation to prompt-sift:prompt-sift-$host-worker." ;;
