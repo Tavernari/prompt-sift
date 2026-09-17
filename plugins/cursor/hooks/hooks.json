@@ -14,6 +14,12 @@
         "command": "/bin/sh \"${CURSOR_PLUGIN_ROOT}/runtime/telemetry.sh\" cursor || printf '%s\\n' '{}'",
         "timeout": 20
       }
+    ],
+    "subagentStart": [
+      {
+        "command": "/bin/sh \"${CURSOR_PLUGIN_ROOT}/runtime/subagent.sh\" cursor || printf '%s\\n' '{}'",
+        "timeout": 20
+      }
     ]
   }
 }

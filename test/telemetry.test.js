@@ -93,10 +93,11 @@ test('stats.sh summarises the ledger per tool without any Node dependency', asyn
   const file = path.join(root, 'metrics.jsonl');
   const at = '2026-09-17T10:00:00Z';
   await fs.writeFile(file, [
-    { at, host: 'claude', cwd: root, event: 'result', tool: 'read', bytes: 4000, tokens: 1000, ms: 5 },
-    { at, host: 'claude', cwd: root, event: 'result', tool: 'read', bytes: 8000, tokens: 2000, ms: 5 },
-    { at, host: 'claude', cwd: root, event: 'result', tool: 'grep', bytes: 400, tokens: 100, ms: 5 },
-    { at, host: 'claude', cwd: root, event: 'deny', tool: 'read', bytes: 120000, tokens: 30000 },
+    { at, host: 'claude', cwd: root, event: 'result', tool: 'read', bytes: 4000, tokens: 1000, ms: 5, session: 'aaa' },
+    { at, host: 'claude', cwd: root, event: 'result', tool: 'read', bytes: 8000, tokens: 2000, ms: 5, session: 'aaa' },
+    { at, host: 'claude', cwd: root, event: 'result', tool: 'grep', bytes: 400, tokens: 100, ms: 5, session: 'bbb' },
+    { at, host: 'claude', cwd: root, event: 'deny', tool: 'read', bytes: 120000, tokens: 30000, session: 'aaa' },
+    { at, host: 'claude', cwd: root, event: 'refuse', tool: 'shell', bytes: 0, tokens: 0, session: 'bbb' },
     { at, host: 'cursor', cwd: '/elsewhere', event: 'result', tool: 'shell', bytes: 100000, tokens: 25000, ms: 5 }
   ].map(row => JSON.stringify(row)).join('\n') + '\n');
   const all = spawnSync('/bin/sh', [stats], { encoding: 'utf8', env: { ...process.env, PROMPT_SIFT_METRICS_FILE: file } });
@@ -105,9 +106,65 @@ test('stats.sh summarises the ledger per tool without any Node dependency', asyn
   assert.match(all.stdout, /grep\s+1\s+400\s+100/);
   assert.match(all.stdout, /shell\s+1\s+100000\s+25000/);
   assert.match(all.stdout, /deferred.*1.*30000/i);
+  // The headline is the share of requested bytes that never entered context: 120000 of 232400.
+  assert.match(all.stdout, /kept out of context:\s+51\.6% of requested bytes/);
+  assert.match(all.stdout, /1 worker refusal/);
   const scoped = spawnSync('/bin/sh', [stats, '--cwd', root], { encoding: 'utf8', env: { ...process.env, PROMPT_SIFT_METRICS_FILE: file } });
-  assert.doesNotMatch(scoped.stdout, /shell/);
+  assert.doesNotMatch(scoped.stdout, /shell\s+1\s+100000/);
+  assert.match(scoped.stdout, /kept out of context:\s+90\.6% of requested bytes/);
+  // Per session: what entered, what was kept out and the share, with rows the host never keyed grouped as "-".
+  const sessions = spawnSync('/bin/sh', [stats, '--by-session'], { encoding: 'utf8', env: { ...process.env, PROMPT_SIFT_METRICS_FILE: file } });
+  assert.equal(sessions.status, 0, sessions.stderr);
+  assert.match(sessions.stdout, /session\s+results\s+~tokens in\s+denials\s+~tokens out\s+kept out/);
+  assert.match(sessions.stdout, /aaa\s+2\s+3000\s+1\s+30000\s+90\.9%/);
+  assert.match(sessions.stdout, /bbb\s+1\s+100\s+0\s+0\s+0\.0%/);
+  assert.match(sessions.stdout, /-\s+1\s+25000\s+0\s+0\s+0\.0%/);
   const empty = spawnSync('/bin/sh', [stats], { encoding: 'utf8', env: { ...process.env, PROMPT_SIFT_METRICS_FILE: path.join(root, 'none.jsonl') } });
   assert.equal(empty.status, 0);
   assert.match(empty.stdout, /no .*recorded/i);
+  // Denials with no results is not a 100% saving; it means the postToolUse hook never ran.
+  const denialsOnly = path.join(root, 'denials.jsonl');
+  await fs.writeFile(denialsOnly, JSON.stringify({ at, host: 'claude', cwd: root, event: 'deny', tool: 'read', bytes: 120000, tokens: 30000 }) + '\n');
+  const oneSided = spawnSync('/bin/sh', [stats], { encoding: 'utf8', env: { ...process.env, PROMPT_SIFT_METRICS_FILE: denialsOnly } });
+  assert.doesNotMatch(oneSided.stdout, /100\.0%/);
+  assert.match(oneSided.stdout, /no tool results recorded.*postToolUse/i);
+});
+
+// A nag that repeats itself is noise; one that escalates is teaching. The third oversized result
+// in one session names the worker and how to call it, and the count is per session, not global.
+test('the nudge escalates within a session and starts over in the next one', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sift nudge '));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const file = path.join(root, 'metrics.jsonl');
+  const env = { PROMPT_SIFT_METRICS_FILE: file, XDG_CACHE_HOME: path.join(root, 'cache') };
+  const big = 'x'.repeat(80000);
+  const cursor = id => JSON.parse(run(telemetry, 'cursor', { cwd: root, conversation_id: id, tool_name: 'Read', tool_input: {}, tool_output: big }, env).stdout).additional_context;
+  const first = cursor('conv-a');
+  assert.match(first, /PromptSift: that read result was 78\.1 KB/);
+  assert.doesNotMatch(first, /second|third|3rd/i);
+  const second = cursor('conv-a');
+  assert.match(second, /second oversized result/i);
+  assert.match(second, /~40000 tokens/);
+  const third = cursor('conv-a');
+  assert.match(third, /3rd oversized result/i);
+  assert.match(third, /~60000 tokens/);
+  assert.match(third, /prompt-sift-cursor-worker/);
+  assert.match(third, /call it with the question and the paths/i);
+  assert.ok(third.length < 400, third);
+  // Another session starts from the beginning; a session the host does not name is keyed per project and day.
+  assert.match(cursor('conv-b'), /was 78\.1 KB/);
+  const claude = () => JSON.parse(run(telemetry, 'claude', { cwd: root, session_id: 'sess-1', tool_name: 'Bash', tool_input: {}, tool_response: big }, env).stdout).hookSpecificOutput.additionalContext;
+  claude(); claude();
+  assert.match(claude(), /3rd oversized result.*prompt-sift-claude-worker/);
+  const anonymous = () => JSON.parse(run(telemetry, 'copilot', { cwd: root, toolName: 'bash', toolArgs: {}, toolResult: { textResultForLlm: big } }, env).stdout).additionalContext;
+  anonymous();
+  assert.match(anonymous(), /second oversized result/i);
+  // Ledger rows carry the session so stats can group by it; the id is hashed, never stored raw.
+  const stored = await rows(file);
+  assert.ok(stored.every(row => typeof row.session === 'string' && row.session.length > 0 && row.session !== 'conv-a'));
+  assert.equal(new Set(stored.filter(row => row.host === 'cursor').map(row => row.session)).size, 2);
+  // A registry that cannot be written still yields the first-form nudge, never silence.
+  const unwritable = run(telemetry, 'cursor', { cwd: root, conversation_id: 'conv-c', tool_name: 'Read', tool_input: {}, tool_output: big },
+    { ...env, XDG_CACHE_HOME: '/proc/nowhere' });
+  assert.match(JSON.parse(unwritable.stdout).additional_context, /was 78\.1 KB/);
 });

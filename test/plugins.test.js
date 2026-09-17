@@ -38,6 +38,10 @@ for (const host of ['cursor', 'copilot', 'claude']) {
       const command = (commandOverride ?? hook.bash ?? hook.command).replaceAll('${' + variable + '}', cache);
       return spawnSync('/bin/sh', ['-c', command], { cwd: cache, input, encoding: 'utf8', env });
     };
+    if (host === 'cursor') {
+      // The registry hook is what makes the worker guard real on Cursor; without it the guard is inert.
+      assert.match(hooks.hooks.subagentStart?.[0]?.command ?? '', /runtime\/subagent\.sh" cursor/);
+    }
     // The matcher is an API: a tool the host never routes to the hook is a tool the hook never sees.
     assert.match(hook.matcher ?? hooks.hooks.PreToolUse[0].matcher, /grep/i, `${host} matcher must route Grep through the hook`);
     const search = host === 'copilot'

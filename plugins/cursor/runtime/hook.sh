@@ -14,6 +14,15 @@ unavailable() {
   allow
 }
 trap 'unavailable' HUP INT TERM
+deny() {
+  result=$(jq -cn --arg host "$host" --arg message "$message" '
+  if $host == "cursor" then {permission:"deny",user_message:$message,agent_message:$message}
+  elif $host == "copilot" then {permissionDecision:"deny",permissionDecisionReason:$message}
+  else {hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$message}} end
+') || unavailable
+  printf '%s\n' "$result"
+  exit 0
+}
 case "$host" in cursor|copilot|claude) ;; *) allow ;; esac
 for utility in awk wc head tr dirname; do
   command -v "$utility" >/dev/null 2>&1 || {
@@ -38,6 +47,8 @@ normalized=$(printf '%s' "$payload" | jq -ce '
    tool: ((.toolName // .tool_name // "") | ascii_downcase),
    path: ($a.path // $a.file_path // $a.filePath // ""),
    command: ($a.command // $a.cmd // $a.script // ""),
+   agent: (.agent_type // ""), conversation: (.conversation_id // ""),
+   session: ((.conversation_id // .session_id // .sessionId // "") | tostring),
    search: (if $a | has("pattern") then {mode: ($a.output_mode // null), head: ($a.head_limit // null)} else null end),
    limit: (if $a | has("view_range") then
      $a.view_range as $r | if ($r|type) == "array" and ($r|length) == 2 and
@@ -70,6 +81,73 @@ is_large() {
   lines=$(awk -v ceiling="$min_lines" 'NR > ceiling { print NR; exit } END { if (NR <= ceiling) print NR }' < "$candidate" 2>/dev/null) || return 1
   [ "$lines" -gt "$min_lines" ]
 }
+# Lines of text a readable text file holds, counting a last line without newline; 0 for anything else.
+text_lines() {
+  candidate=$1
+  case "$candidate" in /*) ;; *) candidate=./$candidate ;; esac
+  [ -f "$candidate" ] && [ -r "$candidate" ] || { printf 0; return; }
+  is_binary "$candidate" && { printf 0; return; }
+  awk 'END { print NR }' < "$candidate" 2>/dev/null || printf 0
+}
+# Globs are expanded here, never by running the command: a pattern that matches nothing stays literal.
+expand_glob() {
+  case "$1" in
+    *[\*\?\[]*) set +f; IFS='
+'; for match in $1; do [ -e "$match" ] && printf '%s\n' "$match"; done; set -f; unset IFS ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+# git diff/show sized with --numstat: read-only, no pager, no index lock, and never the inspected command.
+git_changed_lines() {
+  command -v git >/dev/null 2>&1 || return 1
+  IFS=$(printf '\001'); set -f; set -- $1; unset IFS
+  subcommand=$1; shift
+  if [ "$subcommand" = show ]; then set -- --format= "$@"; fi
+  GIT_OPTIONAL_LOCKS=0 git --no-pager -c core.pager=cat "$subcommand" --numstat --no-ext-diff --no-color "$@" 2>/dev/null |
+    awk -F'\t' '$1 ~ /^[0-9]+$/ { n += $1 + $2 } END { print n + 0 }'
+}
+# Reads the recognizer's lines and prints one finding "<kind><TAB><description>" or nothing.
+# Parts are summed: three 200-line files in one cat are a 600-line read, and so is a glob.
+shell_findings() {
+  sum_lines=0; sum_bytes=0; names=""; pattern=""; part_count=0
+  flush() {
+    if [ "$sum_lines" -gt "$min_lines" ] || [ "$sum_bytes" -gt "$max_bytes" ]; then
+      if [ -n "$pattern" ]; then printf 'sum\t%s (%s files, %s lines together)' "$pattern" "$part_count" "$sum_lines"
+      else printf 'sum\t%s together (%s lines)' "$names" "$sum_lines"; fi
+      exit 0
+    fi
+    sum_lines=0; sum_bytes=0; names=""; pattern=""; part_count=0
+  }
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    case "$entry" in
+      "!part	"*) flush ;;
+      "!unbounded	"*) printf 'unbounded\t%s' "${entry#*	}"; exit 0 ;;
+      "!git	"*)
+        changed=$(git_changed_lines "${entry#*	}") || continue
+        if [ "${changed:-0}" -gt "$min_lines" ]; then
+          printf 'diff\tgit %s: %s changed lines' "$(printf '%s' "${entry#*	}" | tr '\001' ' ')" "$changed"; exit 0
+        fi ;;
+      *)
+        case "$entry" in *[\*\?\[]*) pattern=$entry ;; esac
+        expanded=$(expand_glob "$entry")
+        [ -n "$expanded" ] || continue
+        large=$(printf '%s\n' "$expanded" | while IFS= read -r match; do
+          if is_large "$match"; then printf '%s' "$match"; break; fi
+        done)
+        if [ -n "$large" ]; then printf 'large\t%s' "$large"; exit 0; fi
+        lines_here=$(printf '%s\n' "$expanded" | while IFS= read -r match; do text_lines "$match"; printf '\n'; done | awk '{ n += $1 } END { print n + 0 }')
+        bytes_here=$(printf '%s\n' "$expanded" | while IFS= read -r match; do
+          case "$match" in /*) ;; *) match=./$match ;; esac
+          [ -f "$match" ] && [ -r "$match" ] && ! is_binary "$match" && wc -c < "$match" 2>/dev/null || printf 0; printf '\n'
+        done | awk '{ n += $1 } END { print n + 0 }')
+        count_here=$(printf '%s\n' "$expanded" | awk 'NF { n++ } END { print n + 0 }')
+        sum_lines=$((sum_lines + lines_here)); sum_bytes=$((sum_bytes + bytes_here)); part_count=$((part_count + count_here))
+        [ -n "$pattern" ] || names="${names:+$names, }$entry" ;;
+    esac
+  done
+  flush
+}
 tool=$(printf '%s' "$normalized" | jq -r '.tool') || unavailable
 case "$tool" in
   read|view)
@@ -82,12 +160,22 @@ case "$tool" in
     ;;
   shell|bash)
     [ -r "$runtime_dir/shell-paths.awk" ] || unavailable
+    # A PromptSift worker is read-only by contract; where the host says who is calling, the hook
+    # holds its shell to searching and reading. The redirect must be flagged when the worker's
+    # own readonly flag cannot: it stopped the edit tools and the worker reached for the shell.
+    if is_worker "$host" "$(printf '%s' "$normalized" | jq -r '.agent')" "$(printf '%s' "$normalized" | jq -r '.conversation')"; then
+      verdict=$(printf '%s' "$normalized" | jq -r '.command' | awk -v classify=1 -f "$runtime_dir/shell-paths.awk") || unavailable
+      if [ "$verdict" = write ]; then
+        record refuse "$host" "$cwd" "$tool" 0
+        message="PromptSift: prompt-sift-$host-worker is read-only and this shell command would change the workspace. Do not work around it with redirection, heredocs, tee, sed -i, patch or git; return the orientation you already have (paths, symbols, line ranges) to the parent, which makes the edit itself."
+        deny
+      fi
+    fi
     candidates=$(printf '%s' "$normalized" | jq -r '.command' | awk -v max_lines="$max_targeted" -v max_bytes="$max_bytes" -f "$runtime_dir/shell-paths.awk") || unavailable
-    file=$(printf '%s\n' "$candidates" | while IFS= read -r entry; do
-      [ -n "$entry" ] || continue
-      if is_large "$entry"; then printf '%s' "$entry"; break; fi
-    done)
-    [ -n "$file" ] || allow
+    finding=$(printf '%s\n' "$candidates" | shell_findings)
+    [ -n "$finding" ] || allow
+    kind=${finding%%	*}
+    file=${finding#*	}
     ;;
   grep|rg)
     # Only what can be measured is gated: a content-mode search of one large file with no bound
@@ -113,15 +201,12 @@ case "$tool" in
   *) allow ;;
 esac
 # Ledger row for the denial: size on disk is what would have entered the context, before any host cap.
-record deny "$host" "$cwd" "$tool" "$(wc -c < "$file" 2>/dev/null || printf 0)"
-case "$tool" in
-  grep|rg) message="PromptSift blocked an unbounded content search of $file. Use output_mode files_with_matches or count, a head_limit of at most $max_targeted, a narrower path, or delegate orientation to prompt-sift:prompt-sift-$host-worker." ;;
+record deny "$host" "$cwd" "$tool" "$(wc -c < "$file" 2>/dev/null || printf 0)" "" "$(session_key "$host" "$(printf '%s' "$normalized" | jq -r '.session')" "$cwd")"
+case "$tool:${kind-}" in
+  grep:*|rg:*) message="PromptSift blocked an unbounded content search of $file. Use output_mode files_with_matches or count, a head_limit of at most $max_targeted, a narrower path, or delegate orientation to prompt-sift:prompt-sift-$host-worker." ;;
+  *:unbounded) message="PromptSift blocked an unbounded dump: $file. Bound it (a count, a path, a pipe into head or grep) or delegate orientation to prompt-sift:prompt-sift-$host-worker." ;;
+  *:diff) message="PromptSift blocked $file, more than $min_lines. Start with --stat, then diff one path, or delegate the review to prompt-sift:prompt-sift-$host-worker." ;;
+  *:sum) message="PromptSift blocked a read of $file. Read one file at a time with bounded ranges of at most $max_targeted lines, or delegate orientation to prompt-sift:prompt-sift-$host-worker." ;;
   *) message="PromptSift blocked a broad read of $file. Delegate orientation to prompt-sift:prompt-sift-$host-worker; use bounded reads of at most $max_targeted lines and return a concise summary. Use prompt-sift:prompt-sift-$host-primary for complex reasoning. For debugging, security, concurrency, architecture or edits, use search plus a targeted read." ;;
 esac
-result=$(jq -cn --arg host "$host" --arg message "$message" '
-  if $host == "cursor" then {permission:"deny",user_message:$message,agent_message:$message}
-  elif $host == "copilot" then {permissionDecision:"deny",permissionDecisionReason:$message}
-  else {hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$message}} end
-') || unavailable
-printf '%s\n' "$result"
-exit 0
+deny

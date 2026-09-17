@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { DEFAULT_CONFIG } from "../src/config.js";
 import { readCommand } from "../src/commands/read.js";
 import { writeCommand } from "../src/commands/write.js";
 import { readMetrics } from "../src/core/metrics.js";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 async function worker() {
   let calls = 0;
@@ -94,4 +98,15 @@ test("write waits for a complete response and protects existing targets", async 
   await writeCommand(config, { spec: "Generate result", reference, target, force: true, allowSensitive: false });
   assert.equal(await fs.readFile(target, "utf8"), "export const result = 1;");
   assert.equal(stub.calls(), 1);
+});
+
+// The plugins are the supported path; the help must say so before it lists the external-API commands,
+// so a reader who lands on `npx prompt-sift` is not steered into the legacy mode by default.
+test('help leads with the plugins and marks the external API worker as legacy', () => {
+  const result = spawnSync(process.execPath, [path.join(repoRoot, 'bin', 'prompt-sift.js'), '--help'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /\/plugin marketplace add Tavernari\/prompt-sift/);
+  assert.match(result.stdout, /Legacy \(external API worker\)/);
+  assert.ok(result.stdout.indexOf('/plugin marketplace add') < result.stdout.indexOf('prompt-sift read'));
+  assert.match(result.stdout, /docs\/EXTERNAL_API_MODE\.md/);
 });

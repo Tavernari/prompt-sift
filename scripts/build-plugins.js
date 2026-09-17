@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const json = value => JSON.stringify(value, null, 2) + '\n';
 const hosts = ['cursor', 'copilot', 'claude'];
-const runtimeFiles = ['hook.sh', 'shell-paths.awk', 'bootstrap-jq.sh', 'lib.sh', 'telemetry.sh', 'stats.sh'];
+const runtimeFiles = ['hook.sh', 'shell-paths.awk', 'bootstrap-jq.sh', 'lib.sh', 'telemetry.sh', 'stats.sh', 'subagent.sh'];
 
 export async function pluginFiles(root = repo) {
   const files = new Map();
@@ -44,6 +44,9 @@ export async function pluginFiles(root = repo) {
     const command = `/bin/sh "${script}" ${host} || ${fallback}`;
     // The ledger hook answers {} on every host; a failure of any kind must look like silence, never a decision.
     const ledger = `/bin/sh "\${${rootVariable}}/runtime/telemetry.sh" ${host} || printf '%s\\n' '{}'`;
+    // Cursor names a subagent only at subagentStart; the registry it writes is what lets the
+    // preToolUse hook hold a worker's shell to read-only (Claude Code names it on every call).
+    const registry = `/bin/sh "\${${rootVariable}}/runtime/subagent.sh" ${host} || printf '%s\\n' '{}'`;
     let hooks;
     if (host === 'claude') {
       hooks = { hooks: {
@@ -53,7 +56,8 @@ export async function pluginFiles(root = repo) {
     } else if (host === 'cursor') {
       hooks = { version: 1, hooks: {
         preToolUse: [{ command, matcher: 'Read|Shell|Grep', timeout: 20, failClosed: false }],
-        postToolUse: [{ command: ledger, timeout: 20 }]
+        postToolUse: [{ command: ledger, timeout: 20 }],
+        subagentStart: [{ command: registry, timeout: 20 }]
       } };
       put('rules/routing.mdc', '---\ndescription: Route context-heavy work to PromptSift native agents\nalwaysApply: true\n---\nUse the installed prompt-sift worker for bounded file orientation, returning a concise summary with source references. Use the code-writer skill and writer for predictable generation from an existing reference, and the primary specialist for complex reasoning and final diff review. Match the agent definitions by name in the host tool list; do not call an external CLI or API. Edits stay in the parent: never delegate an in-place change to the worker (read-only, must refuse) or the writer (whole files only); make surgical edits yourself with the edit tool after a targeted read. Respect hooks and never delegate recursively.\n');
     } else {

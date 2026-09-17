@@ -85,6 +85,15 @@ export async function evaluatePolicy(payload, config) {
 
 export function denialMessage(result, host) {
   const relative = path.relative(process.cwd(), result.path) || result.path;
+  if (result.kind === "unbounded") {
+    return `PromptSift blocked an unbounded dump: ${result.description}. Bound it (a count, a path, a pipe into head or grep) or delegate orientation to prompt-sift-${host}-worker.`;
+  }
+  if (result.kind === "diff") {
+    return `PromptSift blocked ${result.description}, more than the configured minLines. Start with --stat, then diff one path, or delegate the review to prompt-sift-${host}-worker.`;
+  }
+  if (result.kind === "sum") {
+    return `PromptSift blocked a read of ${result.description}. Read one file at a time with bounded ranges of at most the configured maxTargetedLines, or delegate orientation to prompt-sift-${host}-worker.`;
+  }
   if (result.command === "grep") {
     return `PromptSift blocked an unbounded content search of ${relative}. Use output_mode files_with_matches or count, a bounded head_limit, a narrower path, or delegate orientation to prompt-sift-${host}-worker.`;
   }
