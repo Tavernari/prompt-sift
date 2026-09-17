@@ -10,13 +10,22 @@ import { readMetrics, summarizeMetrics } from "./core/metrics.js";
 
 const HELP = `PromptSift — keep expensive agents focused on reasoning
 
-Usage:
+The supported path is the plugin, installed by your host and needing no npm, API key or project files:
+
+  /plugin marketplace add Tavernari/prompt-sift      (Copilot CLI, Claude Code)
+  /plugin install prompt-sift@prompt-sift
+  Cursor: Dashboard → Plugins → Team Marketplaces → Import from Repo
+
+Project-local hooks (an alternative to the plugin, never both for one host):
   prompt-sift install [--host cursor,copilot,claude] [--directory PATH]
+  prompt-sift hook --host cursor|copilot|claude
+  prompt-sift doctor
+
+Legacy (external API worker) — sends selected files to an OpenAI-compatible endpoint;
+see docs/EXTERNAL_API_MODE.md:
   prompt-sift read --question TEXT --path FILE [--path FILE ...]
   prompt-sift write --spec TEXT --reference FILE [--target FILE] [--force]
   prompt-sift inspect --path FILE [--path FILE ...]
-  prompt-sift hook --host cursor|copilot|claude
-  prompt-sift doctor
   prompt-sift stats [--json]
 
 Common options:
