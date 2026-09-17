@@ -11,6 +11,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh \"${CLAUDE_PLUGIN_ROOT}/runtime/telemetry.sh\" claude || printf '%s\\n' '{}'",
+            "timeout": 20
+          }
+        ]
+      }
     ]
   }
 }

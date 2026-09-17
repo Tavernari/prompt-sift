@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const json = value => JSON.stringify(value, null, 2) + '\n';
 const hosts = ['cursor', 'copilot', 'claude'];
-const runtimeFiles = ['hook.sh', 'shell-paths.awk', 'bootstrap-jq.sh'];
+const runtimeFiles = ['hook.sh', 'shell-paths.awk', 'bootstrap-jq.sh', 'lib.sh', 'telemetry.sh', 'stats.sh'];
 
 export async function pluginFiles(root = repo) {
   const files = new Map();
@@ -31,7 +31,7 @@ export async function pluginFiles(root = repo) {
       put(`agents/prompt-sift-${host}-${role}${host === 'copilot' ? '.agent' : ''}.md`,
         await fs.readFile(path.join(root, 'templates/agents', `${host}-${role}.md`), 'utf8'));
     }
-    for (const skill of ['bulk-reader', 'code-writer']) {
+    for (const skill of ['bulk-reader', 'code-writer', 'context-stats']) {
       put(`skills/${skill}/SKILL.md`, (await fs.readFile(path.join(root, 'templates/skills', skill, 'SKILL.md'), 'utf8')).replaceAll('{{HOST}}', host));
     }
     put('skills/code-writer/scripts/write-file.sh', await fs.readFile(path.join(root, 'templates/skills/code-writer/scripts/write-file.sh'), 'utf8'));
@@ -42,14 +42,25 @@ export async function pluginFiles(root = repo) {
     // printf is a shell builtin: even a missing script cannot turn an optional hook into a denial.
     const fallback = `printf '%s\\n' '${neutral}'`;
     const command = `/bin/sh "${script}" ${host} || ${fallback}`;
+    // The ledger hook answers {} on every host; a failure of any kind must look like silence, never a decision.
+    const ledger = `/bin/sh "\${${rootVariable}}/runtime/telemetry.sh" ${host} || printf '%s\\n' '{}'`;
     let hooks;
     if (host === 'claude') {
-      hooks = { hooks: { PreToolUse: [{ matcher: 'Read|Bash', hooks: [{ type: 'command', command, timeout: 20 }] }] } };
+      hooks = { hooks: {
+        PreToolUse: [{ matcher: 'Read|Bash', hooks: [{ type: 'command', command, timeout: 20 }] }],
+        PostToolUse: [{ hooks: [{ type: 'command', command: ledger, timeout: 20 }] }]
+      } };
     } else if (host === 'cursor') {
-      hooks = { version: 1, hooks: { preToolUse: [{ command, matcher: 'Read|Shell', timeout: 20, failClosed: false }] } };
+      hooks = { version: 1, hooks: {
+        preToolUse: [{ command, matcher: 'Read|Shell', timeout: 20, failClosed: false }],
+        postToolUse: [{ command: ledger, timeout: 20 }]
+      } };
       put('rules/routing.mdc', '---\ndescription: Route context-heavy work to PromptSift native agents\nalwaysApply: true\n---\nUse the installed prompt-sift worker for bounded file orientation, returning a concise summary with source references. Use the code-writer skill and writer for predictable generation from an existing reference, and the primary specialist for complex reasoning and final diff review. Match the agent definitions by name in the host tool list; do not call an external CLI or API. Respect hooks and never delegate recursively.\n');
     } else {
-      hooks = { version: 1, hooks: { preToolUse: [{ type: 'command', bash: command, matcher: 'view|bash', timeoutSec: 20 }] } };
+      hooks = { version: 1, hooks: {
+        preToolUse: [{ type: 'command', bash: command, matcher: 'view|bash', timeoutSec: 20 }],
+        postToolUse: [{ type: 'command', bash: ledger, timeoutSec: 20 }]
+      } };
     }
     put('hooks/hooks.json', json(hooks));
     put('README.md', `# PromptSift for ${host}\n\nInstall this bundle using your host's plugin manager. It includes model-pinned native agents and the hook runtime. No npm install, init command, extra API key, or project writes are needed.\n\nThe host discovers agents and the bulk-reader and code-writer skills automatically. Use the worker for file orientation the writer for reference-based generation, and the primary specialist for complex reasoning and final review. The host may prefix agent names with the plugin name; select the corresponding discovered agent.\n\nHooks target macOS and Linux, using /bin/sh, jq, awk and standard system utilities. Node.js is not used. If jq is missing, the hook automatically downloads jq 1.8.2 for macOS/Linux x64 or ARM64 to a user cache and verifies its pinned SHA-256 before execution. No sudo or package manager is used. A network or integrity failure leaves native agents active and reports that read enforcement is inactive. Set PROMPT_SIFT_AUTO_INSTALL=0 to disable downloads. Host permissions and model availability still apply.\n\nThis directory is self-contained and may be copied into a plugin cache without the rest of the repository.\n`);

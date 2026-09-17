@@ -59,7 +59,7 @@ Native agents use your host's authentication and model access. Copilot declares 
 
 Set `PROMPT_SIFT_AUTO_INSTALL=0` for offline/system-jq-only operation. If download, integrity verification or runtime startup fails, the hook warns and allows normal work; native subagents remain available. Downloads come only from the [official jq 1.8.2 release](https://github.com/jqlang/jq/releases/tag/jq-1.8.2). Windows is out of scope for now. Node.js remains a development/test dependency and is used by the optional external API CLI.
 
-The shell recognizer supports quoted paths, chained direct readers, head/tail windows, pipes and redirects. It never executes the command it inspects. Shell expansion, dynamic working-directory changes and control characters in paths are not fully modeled; unsupported inputs fail open. This is a context optimization policy, not a security boundary.
+Binary files (images, PDFs, archives) are never gated, whatever their size: the host renders them itself and a worker cannot summarise them. The shell recognizer supports quoted paths, chained direct readers, head/tail windows, pipes and redirects. It never executes the command it inspects. Shell expansion, dynamic working-directory changes and control characters in paths are not fully modeled; unsupported inputs fail open. This is a context optimization policy, not a security boundary.
 
 Installation references: [Cursor marketplaces](https://cursor.com/docs/plugins), [Copilot plugins](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/plugins-finding-installing), [Claude Code plugins](https://code.claude.com/docs/en/discover-plugins).
 
@@ -211,6 +211,16 @@ Caches are stored with user-only permissions where supported. Cache and metrics 
 
 ## Metrics
 
+**Plugin mode** records a ledger through each host's `postToolUse` hook: one JSON line per tool result with host, project directory, tool name, bytes, estimated tokens (`bytes / 4`) and duration — never paths, inputs or contents. `preToolUse` denials are recorded with the size of the file kept out, so savings are measured rather than assumed. MCP results count too; in real sessions the largest dumps are often a ticket or a web page, not a file read. The ledger lives in the user cache (`$XDG_CACHE_HOME/prompt-sift/metrics.jsonl`, `~/Library/Caches/prompt-sift/` on macOS, `~/.cache/prompt-sift/` on Linux); `PROMPT_SIFT_METRICS_FILE` overrides it. When one result exceeds `maxBytes`, the hook adds a single short reminder to bound the next request. `PROMPT_SIFT_TELEMETRY=0` disables recording, `PROMPT_SIFT_NUDGE=0` keeps recording without the reminder. A ledger that cannot be written never changes a decision.
+
+Read it with the bundled `context-stats` skill ("how much context did tools use in this project?") or directly:
+
+```bash
+/bin/sh "<plugin-root>/runtime/stats.sh" --cwd "$PWD" [--since 2026-09-17T00:00:00Z]
+```
+
+**External API mode:**
+
 ```bash
 npx prompt-sift stats
 ```
@@ -255,4 +265,4 @@ The bulk-reader delegates bounded source inspection to the read-only worker. The
 
 The writer requires a specification, existing reference and target. It streams generated code into a bundled POSIX shell helper and returns a short summary instead of the code. The helper rejects missing/empty references, empty output, symlink targets and existing files unless replacement is explicitly requested with `--force`. Destination directories must exist. Output is staged beside the target before publication; files are created with private permissions. This helper has no Node, jq or network dependency.
 
-The helper guards its own writes; agent instructions and host permissions govern other shell operations. It is not a sandbox against a malicious process changing destination directories concurrently. Native model execution still depends on host access and model availability. CI exercises isolated plugin bundles, discovery contracts and script behavior on Linux/macOS; it does not run authenticated model sessions or establish a token-savings percentage. Cache and token metrics currently belong to the optional external CLI mode.
+The helper guards its own writes; agent instructions and host permissions govern other shell operations. It is not a sandbox against a malicious process changing destination directories concurrently. Native model execution still depends on host access and model availability. CI exercises isolated plugin bundles, discovery contracts and script behavior on Linux/macOS; it does not run authenticated model sessions or establish a token-savings percentage. Plugin mode measures context per tool through the `postToolUse` ledger (see Metrics); the worker cache belongs to the optional external CLI mode.

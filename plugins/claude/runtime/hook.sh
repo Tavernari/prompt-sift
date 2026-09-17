@@ -49,25 +49,8 @@ normalized=$(printf '%s' "$payload" | jq -ce '
 [ -n "$normalized" ] || unavailable
 cwd=$(printf '%s' "$normalized" | jq -r '.cwd') || unavailable
 [ -z "$cwd" ] || cd -- "$cwd" || unavailable
-config='{}'
-if [ -e .prompt-sift.json ]; then
-  config=$(head -c 1048577 .prompt-sift.json) || unavailable
-  [ "$(printf '%s' "$config" | wc -c)" -le 1048576 ] || unavailable
-fi
-limits=$(printf '%s' "$config" | jq -er '
-  def positive: tonumber | if . > 0 and . <= 2147483647 and floor == . then . else error("limit") end;
-  if type != "object" then error("config") else . end |
-  [(env.PROMPT_SIFT_MIN_LINES // .minLines // 350 | positive),
-   (env.PROMPT_SIFT_MAX_BYTES // .maxBytes // 50000 | positive),
-   (env.PROMPT_SIFT_MAX_TARGETED_LINES // .maxTargetedLines // 350 | positive)] | @tsv
-' 2>/dev/null) || unavailable
-# Values have been validated as bounded positive integers; no pathname expansion.
-set -f
-set -- $limits
-[ "$#" -eq 3 ] || unavailable
-min_lines=$1
-max_bytes=$2
-max_targeted=$3
+. "$runtime_dir/lib.sh"
+read_limits || unavailable
 is_binary() {
   sample=$(head -c 8192 "$1" 2>/dev/null | wc -c) || return 1
   stripped=$(head -c 8192 "$1" 2>/dev/null | tr -d '\000' | wc -c) || return 1
@@ -107,6 +90,8 @@ case "$tool" in
     ;;
   *) allow ;;
 esac
+# Ledger row for the denial: size on disk is what would have entered the context, before any host cap.
+record deny "$host" "$cwd" "$tool" "$(wc -c < "$file" 2>/dev/null || printf 0)"
 message="PromptSift blocked a broad read of $file. Delegate orientation to prompt-sift:prompt-sift-$host-worker; use bounded reads of at most $max_targeted lines and return a concise summary. Use prompt-sift:prompt-sift-$host-primary for complex reasoning. For debugging, security, concurrency, architecture or edits, use search plus a targeted read."
 result=$(jq -cn --arg host "$host" --arg message "$message" '
   if $host == "cursor" then {permission:"deny",user_message:$message,agent_message:$message}

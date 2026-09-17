@@ -76,6 +76,39 @@ for (const host of ['cursor', 'copilot', 'claude']) {
     assert.deepEqual(await fs.readdir(project), before);
     assert.equal(await fs.access(path.join(cache, 'node_modules')).then(() => true, () => false), false);
   });
+
+  test(`${host} plugin ships the postToolUse ledger and the context-stats skill`, async t => {
+    const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sift ledger '));
+    t.after(() => fs.rm(temp, { recursive: true, force: true }));
+    const cache = path.join(temp, 'plugin cache');
+    await fs.cp(path.join(root, 'plugins', host), cache, { recursive: true });
+    const hooks = await readJson(path.join(cache, 'hooks/hooks.json'));
+    const post = host === 'claude' ? hooks.hooks.PostToolUse[0].hooks[0] : hooks.hooks.postToolUse[0];
+    const variable = host === 'cursor' ? 'CURSOR_PLUGIN_ROOT' : host === 'copilot' ? 'PLUGIN_ROOT' : 'CLAUDE_PLUGIN_ROOT';
+    const command = (post.bash ?? post.command).replaceAll('${' + variable + '}', cache);
+    const ledger = path.join(temp, 'metrics.jsonl');
+    const big = 'x'.repeat(60000);
+    const payload = host === 'copilot'
+      ? { cwd: temp, toolName: 'view', toolArgs: {}, toolResult: { resultType: 'success', textResultForLlm: big } }
+      : host === 'cursor' ? { cwd: temp, tool_name: 'Read', tool_input: {}, tool_output: big }
+      : { cwd: temp, tool_name: 'Read', tool_input: {}, tool_response: { file: { content: big } } };
+    const run = (input, environment = {}) => spawnSync('/bin/sh', ['-c', command], {
+      cwd: cache, input, encoding: 'utf8', env: { ...process.env, ...environment, [variable]: cache, PROMPT_SIFT_METRICS_FILE: ledger }
+    });
+    const result = run(JSON.stringify(payload));
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /PromptSift: that (read|view) result was 58\.6 KB/);
+    const rows = (await fs.readFile(ledger, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+    assert.equal(rows.length, 1); assert.equal(rows[0].host, host); assert.equal(rows[0].event, 'result');
+    // A missing runtime, a missing jq or garbage input all answer with a neutral object.
+    assert.deepEqual(JSON.parse(run('garbage').stdout), {});
+    assert.deepEqual(JSON.parse(run(JSON.stringify(payload), { PATH: '/nonexistent' }).stdout), {});
+    await fs.rm(path.join(cache, 'runtime'), { recursive: true });
+    assert.deepEqual(JSON.parse(run(JSON.stringify(payload)).stdout), {});
+    const skill = await fs.readFile(path.join(root, 'plugins', host, 'skills/context-stats/SKILL.md'), 'utf8');
+    assert.match(skill, /runtime\/stats\.sh/);
+    assert.match(skill, /--cwd/);
+  });
 }
 
 test('marketplaces resolve self-contained bundles with native model contracts', async () => {

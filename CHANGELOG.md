@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Never gate binary files: an image or PDF above `maxBytes` was denied with "use bounded reads" on every host, and the worker it pointed to was denied the same way.
+- Record a `postToolUse` ledger in plugin mode (bytes and estimated tokens per tool result, denials included; no paths or contents), add one short reminder when a single result exceeds `maxBytes`, and ship `runtime/stats.sh` plus a `context-stats` skill to read it. `PROMPT_SIFT_TELEMETRY=0` and `PROMPT_SIFT_NUDGE=0` opt out.
+
 ## 0.4.0
 
 - Add native code-writer agents for Cursor, Copilot CLI and Claude Code.
