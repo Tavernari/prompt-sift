@@ -2,7 +2,7 @@
 name: prompt-sift-claude-worker
 description: Use proactively for bounded file orientation; return a concise summary to save parent context.
 model: sonnet
-effort: high
+effort: low
 tools: Read, Grep, Glob
 ---
 

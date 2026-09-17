@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The orientation worker now runs at `low` reasoning effort on every host (Cursor `gpt-5.6-luna[effort=low]`, Copilot `reasoningEffort: low`, Claude Code Sonnet `effort: low`), and the external CLI worker defaults to `low` as well. Search plus a bounded read plus a summary does not need `xhigh`, and at `xhigh` the "cheap" worker could out-cost the parent session. The writer keeps `xhigh`.
+
 - Worker contracts now refuse delegated edits explicitly and forbid the shell workaround (redirection, heredocs, `tee`, `sed -i`, `patch`, `git apply`). In a live Cursor session the read-only worker, handed an edit, wrote "Applying edits via shell since file edit tools are blocked" and modified four files: Cursor's `readonly` only blocked the edit tools. The primary agents, the bulk-reader skill and the Cursor routing rule now say edits stay in the parent; `test/agent-contracts.test.js` pins all of it.
 
 - Grep is routed through the hook on all three hosts. A content-mode search of one large file with no bound under `maxTargetedLines` is denied like a read of that file; `files_with_matches`, `count`, bounded `head_limit` and directory searches pass. Claude Code's `head_limit: 0` (unlimited) is denied even without a path. Before this, Grep never reached the hook on any host.

@@ -47,11 +47,13 @@ Any trust confirmation or plugin reload requested by the host is part of its nor
 
 | Host | Primary specialist | Orientation worker |
 |---|---|---|
-| Cursor | GPT-5.6 Sol / high | GPT-5.6 Luna / xhigh |
-| GitHub Copilot CLI | GPT-5.6 Sol / high | GPT-5.6 Luna / xhigh |
-| Claude Code | Opus / high | Sonnet / high |
+| Cursor | GPT-5.6 Sol / high | GPT-5.6 Luna / low |
+| GitHub Copilot CLI | GPT-5.6 Sol / high | GPT-5.6 Luna / low |
+| Claude Code | Opus / high | Sonnet / low |
 
 Agents are discovered by the host and may appear with a `prompt-sift:` prefix. Delegate orientation to the worker; use the primary specialist for complex reasoning and final review. Installing a primary specialist does not change an existing parent session. Workers use bounded reads and return concise summaries; they do not recursively delegate or call an external API worker.
+
+The orientation worker runs at low reasoning effort on purpose: its job is search, a bounded read and a short summary, and a worker at `xhigh` can cost more per delegation than the parent session it was meant to relieve (a session routed to Grok 4.6 delegating to Luna/xhigh paid for reasoning the task never needed). Raise it in your own agent file if your codebase needs it; the writer keeps `xhigh` because it produces code.
 
 Native agents use your host's authentication and model access. Copilot declares the model as required. Cursor and Claude Code can substitute unavailable models according to host policy; check the model shown in your session.
 
@@ -145,7 +147,7 @@ The target must not exist. Replacement requires an explicit `--force`. PromptSif
     "baseUrl": "https://api.openai.com/v1",
     "model": "gpt-5.6-luna",
     "apiKeyEnv": "OPENAI_API_KEY",
-    "reasoningEffort": "xhigh"
+    "reasoningEffort": "low"
   }
 }
 ```
@@ -157,7 +159,7 @@ Environment variables override the most common settings:
 | `PROMPT_SIFT_BASE_URL` | OpenAI-compatible `/v1` base URL |
 | `PROMPT_SIFT_MODEL` | Worker model identifier |
 | `OPENAI_API_KEY` | Default worker credential; never place it in the JSON file |
-| `PROMPT_SIFT_REASONING_EFFORT` | Worker reasoning level, e.g. `xhigh` |
+| `PROMPT_SIFT_REASONING_EFFORT` | Worker reasoning level, e.g. `low` (the default) or `medium` |
 | `PROMPT_SIFT_MIN_LINES` | Full-read line threshold |
 | `PROMPT_SIFT_MAX_BYTES` | Full-read byte threshold |
 | `PROMPT_SIFT_MAX_TARGETED_LINES` | Largest partial read that bypasses delegation |

@@ -1,7 +1,7 @@
 ---
 name: prompt-sift-cursor-worker
 description: Use proactively for bounded file orientation; return a concise summary to save parent context.
-model: "gpt-5.6-luna[effort=xhigh]"
+model: "gpt-5.6-luna[effort=low]"
 readonly: true
 ---
 

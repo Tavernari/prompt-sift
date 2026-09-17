@@ -18,7 +18,7 @@ export const DEFAULT_CONFIG = Object.freeze({
     baseUrl: "https://api.openai.com/v1",
     model: "gpt-5.6-luna",
     apiKeyEnv: "OPENAI_API_KEY",
-    reasoningEffort: "xhigh"
+    reasoningEffort: "low"
   }
 });
 

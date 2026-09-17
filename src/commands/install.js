@@ -76,7 +76,7 @@ const COPILOT_INSTRUCTIONS = `---
 applyTo: "**"
 ---
 
-Delegate file orientation to prompt-sift-copilot-worker (Luna/xhigh) and complex reasoning to prompt-sift-copilot-primary (Sol/high). Return concise summaries. Use the external PromptSift CLI only when explicitly requested. When a read is blocked, follow the hook message. Keep debugging, architecture, security, concurrency, edits, and correctness decisions in the primary agent with search plus targeted reads. Review every generated diff and run relevant tests.
+Delegate file orientation to prompt-sift-copilot-worker (Luna/low) and complex reasoning to prompt-sift-copilot-primary (Sol/high). Return concise summaries. Use the external PromptSift CLI only when explicitly requested. When a read is blocked, follow the hook message. Keep debugging, architecture, security, concurrency, edits, and correctness decisions in the primary agent with search plus targeted reads. Review every generated diff and run relevant tests.
 `;
 
 async function readJson(filePath, fallback) {
@@ -229,7 +229,7 @@ export async function installCommand(options) {
 description: PromptSift native model routing
 alwaysApply: true
 ---
-Delegate file orientation to prompt-sift-cursor-worker (Luna/xhigh). Use prompt-sift-cursor-primary (Sol/high) for complex reasoning and final review. Ask workers for concise summaries with source references. Workers must use bounded reads and must not recursively delegate or call the external API worker.
+Delegate file orientation to prompt-sift-cursor-worker (Luna/low). Use prompt-sift-cursor-primary (Sol/high) for complex reasoning and final review. Ask workers for concise summaries with source references. Workers must use bounded reads and must not recursively delegate or call the external API worker.
 `, options.force)) written.push(path.relative(root, target));
   }
   await updateGitignore(root);
