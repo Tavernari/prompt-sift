@@ -108,3 +108,74 @@ test('an unbounded content search of one large file is a read in disguise; searc
   });
   assert.match(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecisionReason, /search of Big\.swift.*head_limit.*350/);
 });
+
+// The recognizer knew cat/head/tail of one file. The context is lost elsewhere: several
+// small files in one cat, a glob, git log -p, an unbounded git diff, find -exec cat.
+test('shell dumpers: sums, globs, git history and diffs, find -exec cat', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sift dumpers '));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'a', GIT_AUTHOR_EMAIL: 'a@a', GIT_COMMITTER_NAME: 'a', GIT_COMMITTER_EMAIL: 'a@a' } });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout;
+  };
+  await fs.mkdir(path.join(root, 'Sources'));
+  await fs.mkdir(path.join(root, 'Generated'));
+  for (const name of ['a', 'b', 'c']) await fs.writeFile(path.join(root, 'Sources', `${name}.swift`), 'let x = 1\n'.repeat(200));
+  await fs.writeFile(path.join(root, 'small.swift'), 'let x = 1\n'.repeat(20));
+  await fs.writeFile(path.join(root, 'Generated', 'big.swift'), 'let x = 1\n'.repeat(20));
+  git('init', '-q'); git('add', '.'); git('commit', '-qm', 'base');
+  await fs.writeFile(path.join(root, 'Generated', 'big.swift'), 'let x = 2\n'.repeat(500));
+  git('commit', '-qam', 'big');
+  await fs.writeFile(path.join(root, 'Generated', 'big.swift'), 'let x = 3\n'.repeat(600));
+  await fs.writeFile(path.join(root, 'small.swift'), 'let x = 4\n'.repeat(20));
+  const run = (command, host = 'cursor') => {
+    const result = spawnSync('/bin/sh', [runner, host], {
+      cwd: root, input: JSON.stringify({ cwd: root, tool_name: 'Shell', tool_input: { command } }), encoding: 'utf8', env: process.env
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const value = JSON.parse(result.stdout);
+    return [value.permission, value.agent_message ?? ''];
+  };
+  const denied = {
+    'cat Sources/a.swift Sources/b.swift Sources/c.swift': /Sources\/a\.swift.*together/,
+    'cat Sources/*.swift': /Sources\/\*\.swift/,
+    'git log -p': /git log -p/,
+    'git log --patch --since=1.week': /git log/,
+    'git log -p -- small.swift': /git log/,
+    'git diff': /git diff.*1140 changed lines/,
+    'git diff -- Generated/big.swift': /git diff.*Generated\/big\.swift.*1100 changed lines/,
+    'git show HEAD': /git show.*520 changed lines/,
+    'git show HEAD -- Generated/big.swift': /git show/,
+    'git diff HEAD~1 HEAD': /git diff/,
+    'find Sources -name "*.swift" -exec cat {} +': /find .* -exec cat/,
+    "find . -name '*.swift' -exec cat {} \;": /find .* -exec cat/,
+    'find Sources -type f | xargs cat': /xargs cat/,
+    'ls Sources | xargs -I{} cat Sources/{}': /xargs/,
+  };
+  for (const [command, pattern] of Object.entries(denied)) {
+    const [permission, message] = run(command);
+    assert.equal(permission, 'deny', command);
+    assert.match(message, pattern, command);
+    assert.match(message, /worker/, command);
+  }
+  const allowed = [
+    'cat Sources/a.swift Sources/b.swift Sources/c.swift | head -100', 'cat small.swift Sources/c.swift', 'cat "Sources/nothing*.swift"',
+    'git log --oneline', 'git log -p -3', 'git log -p -n 2', 'git log --patch --max-count=1', 'git log -p | head -200', 'git log --stat',
+    'git diff --stat', 'git diff --name-only', 'git diff -- small.swift', 'git diff -- Sources', 'git diff | head -100', 'git diff --numstat', 'git show --stat HEAD', 'git show HEAD -- small.swift',
+    'git show HEAD:small.swift', 'git diff HEAD~1 HEAD --shortstat', 'git status',
+    'find Sources -name "*.swift"', 'find Sources -name "*.swift" -exec grep -l x {} +', 'find Sources -name "*.swift" -exec cat {} + | head -50',
+    'find Sources -type f | xargs grep -l x', 'find Sources -type f | xargs wc -l', 'echo Sources/*.swift'
+  ];
+  for (const command of allowed) assert.equal(run(command)[0], 'allow', command);
+  // Outside a repository git cannot be measured, so it fails open; the history dump is unbounded regardless.
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'sift nogit '));
+  t.after(() => fs.rm(outside, { recursive: true, force: true }));
+  const bare = command => JSON.parse(spawnSync('/bin/sh', [runner, 'cursor'], {
+    cwd: outside, input: JSON.stringify({ cwd: outside, tool_name: 'Shell', tool_input: { command } }), encoding: 'utf8', env: process.env
+  }).stdout).permission;
+  assert.equal(bare('git diff'), 'allow');
+  assert.equal(bare('git log -p'), 'deny');
+  // The hook never runs the inspected command: measuring the diff must not touch the index.
+  assert.equal(git('status', '--porcelain').includes('??'), false);
+});
