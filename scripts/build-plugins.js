@@ -47,18 +47,18 @@ export async function pluginFiles(root = repo) {
     let hooks;
     if (host === 'claude') {
       hooks = { hooks: {
-        PreToolUse: [{ matcher: 'Read|Bash', hooks: [{ type: 'command', command, timeout: 20 }] }],
+        PreToolUse: [{ matcher: 'Read|Bash|Grep', hooks: [{ type: 'command', command, timeout: 20 }] }],
         PostToolUse: [{ hooks: [{ type: 'command', command: ledger, timeout: 20 }] }]
       } };
     } else if (host === 'cursor') {
       hooks = { version: 1, hooks: {
-        preToolUse: [{ command, matcher: 'Read|Shell', timeout: 20, failClosed: false }],
+        preToolUse: [{ command, matcher: 'Read|Shell|Grep', timeout: 20, failClosed: false }],
         postToolUse: [{ command: ledger, timeout: 20 }]
       } };
       put('rules/routing.mdc', '---\ndescription: Route context-heavy work to PromptSift native agents\nalwaysApply: true\n---\nUse the installed prompt-sift worker for bounded file orientation, returning a concise summary with source references. Use the code-writer skill and writer for predictable generation from an existing reference, and the primary specialist for complex reasoning and final diff review. Match the agent definitions by name in the host tool list; do not call an external CLI or API. Respect hooks and never delegate recursively.\n');
     } else {
       hooks = { version: 1, hooks: {
-        preToolUse: [{ type: 'command', bash: command, matcher: 'view|bash', timeoutSec: 20 }],
+        preToolUse: [{ type: 'command', bash: command, matcher: 'view|bash|grep', timeoutSec: 20 }],
         postToolUse: [{ type: 'command', bash: ledger, timeoutSec: 20 }]
       } };
     }

@@ -38,6 +38,7 @@ normalized=$(printf '%s' "$payload" | jq -ce '
    tool: ((.toolName // .tool_name // "") | ascii_downcase),
    path: ($a.path // $a.file_path // $a.filePath // ""),
    command: ($a.command // $a.cmd // $a.script // ""),
+   search: (if $a | has("pattern") then {mode: ($a.output_mode // null), head: ($a.head_limit // null)} else null end),
    limit: (if $a | has("view_range") then
      $a.view_range as $r | if ($r|type) == "array" and ($r|length) == 2 and
        ($r[0]|type) == "number" and ($r[1]|type) == "number" and
@@ -88,11 +89,35 @@ case "$tool" in
     done)
     [ -n "$file" ] || allow
     ;;
+  grep|rg)
+    # Only what can be measured is gated: a content-mode search of one large file with no bound
+    # under max_targeted is that file's read in disguise. Directory searches are the host's own
+    # cap to enforce, except an explicit head_limit of 0, which Claude Code treats as unlimited.
+    verdict=$(printf '%s' "$normalized" | jq -r --arg host "$host" --argjson maximum "$max_targeted" '
+      .search as $s |
+      if $s == null then "allow" else
+      ($s.mode // (if $host == "claude" then "files_with_matches" else "content" end)) as $mode |
+      if $mode != "content" then "allow"
+      elif ($s.head | type) == "number" and $s.head > 0 and $s.head <= $maximum and ($s.head | floor) == $s.head then "allow"
+      elif ($s.head | type) == "number" and $s.head == 0 and $host == "claude" then "unbounded"
+      else "measure" end end
+    ') || unavailable
+    [ "$verdict" != allow ] || allow
+    file=$(printf '%s' "$normalized" | jq -r '.path') || unavailable
+    if [ "$verdict" = measure ]; then
+      [ -n "$file" ] || allow
+      is_large "$file" || allow
+    fi
+    [ -n "$file" ] || file="the workspace"
+    ;;
   *) allow ;;
 esac
 # Ledger row for the denial: size on disk is what would have entered the context, before any host cap.
 record deny "$host" "$cwd" "$tool" "$(wc -c < "$file" 2>/dev/null || printf 0)"
-message="PromptSift blocked a broad read of $file. Delegate orientation to prompt-sift:prompt-sift-$host-worker; use bounded reads of at most $max_targeted lines and return a concise summary. Use prompt-sift:prompt-sift-$host-primary for complex reasoning. For debugging, security, concurrency, architecture or edits, use search plus a targeted read."
+case "$tool" in
+  grep|rg) message="PromptSift blocked an unbounded content search of $file. Use output_mode files_with_matches or count, a head_limit of at most $max_targeted, a narrower path, or delegate orientation to prompt-sift:prompt-sift-$host-worker." ;;
+  *) message="PromptSift blocked a broad read of $file. Delegate orientation to prompt-sift:prompt-sift-$host-worker; use bounded reads of at most $max_targeted lines and return a concise summary. Use prompt-sift:prompt-sift-$host-primary for complex reasoning. For debugging, security, concurrency, architecture or edits, use search plus a targeted read." ;;
+esac
 result=$(jq -cn --arg host "$host" --arg message "$message" '
   if $host == "cursor" then {permission:"deny",user_message:$message,agent_message:$message}
   elif $host == "copilot" then {permissionDecision:"deny",permissionDecisionReason:$message}

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Grep is routed through the hook on all three hosts. A content-mode search of one large file with no bound under `maxTargetedLines` is denied like a read of that file; `files_with_matches`, `count`, bounded `head_limit` and directory searches pass. Claude Code's `head_limit: 0` (unlimited) is denied even without a path. Before this, Grep never reached the hook on any host.
+
 - Never gate binary files: an image or PDF above `maxBytes` was denied with "use bounded reads" on every host, and the worker it pointed to was denied the same way.
 - Record a `postToolUse` ledger in plugin mode (bytes and estimated tokens per tool result, denials included; no paths or contents), add one short reminder when a single result exceeds `maxBytes`, and ship `runtime/stats.sh` plus a `context-stats` skill to read it. `PROMPT_SIFT_TELEMETRY=0` and `PROMPT_SIFT_NUDGE=0` opt out.
 

@@ -98,3 +98,17 @@ test("binary files are never gated, however large they are", async (t) => {
   const shell = await evaluatePolicy({ tool_name: "Bash", tool_input: { command: "cat screenshot.png" }, cwd: root }, config);
   assert.equal(shell.allow, true);
 });
+
+test("an unbounded content search of one large file is denied like a read; capped searches pass", async (t) => {
+  const { root, large } = await fixture();
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const grep = (tool_input, tool_name = "Grep") => evaluatePolicy({ tool_name, tool_input, cwd: root }, config);
+  assert.equal((await grep({ pattern: "line", path: large, output_mode: "content" })).allow, false);
+  assert.equal((await grep({ pattern: "line", path: large, output_mode: "content", head_limit: 100 })).allow, true);
+  assert.equal((await grep({ pattern: "line", path: large, output_mode: "files_with_matches" })).allow, true);
+  assert.equal((await grep({ pattern: "line", path: root, output_mode: "content" })).allow, true);
+  assert.equal((await grep({ pattern: "line", output_mode: "content", head_limit: 0 })).allow, false);
+  assert.equal((await grep({ pattern: "line", path: large }, "Grep")).allow, true, "Claude Code defaults to files_with_matches");
+  const denied = await grep({ pattern: "line", path: large, output_mode: "content" });
+  assert.equal(denied.command, "grep");
+});

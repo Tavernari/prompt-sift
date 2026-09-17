@@ -5,7 +5,7 @@
       {
         "type": "command",
         "bash": "/bin/sh \"${PLUGIN_ROOT}/runtime/hook.sh\" copilot || printf '%s\\n' '{\"permissionDecision\":\"allow\"}'",
-        "matcher": "view|bash",
+        "matcher": "view|bash|grep",
         "timeoutSec": 20
       }
     ],

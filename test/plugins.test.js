@@ -38,8 +38,16 @@ for (const host of ['cursor', 'copilot', 'claude']) {
       const command = (commandOverride ?? hook.bash ?? hook.command).replaceAll('${' + variable + '}', cache);
       return spawnSync('/bin/sh', ['-c', command], { cwd: cache, input, encoding: 'utf8', env });
     };
+    // The matcher is an API: a tool the host never routes to the hook is a tool the hook never sees.
+    assert.match(hook.matcher ?? hooks.hooks.PreToolUse[0].matcher, /grep/i, `${host} matcher must route Grep through the hook`);
+    const search = host === 'copilot'
+      ? { cwd: project, toolName: 'grep', toolArgs: { pattern: 'x', path: 'large file.js', output_mode: 'content' } }
+      : { cwd: project, tool_name: 'Grep', tool_input: { pattern: 'x', path: 'large file.js', output_mode: 'content' } };
     const denied = resultOf(run(JSON.stringify(payload)));
     assert.equal(decision(denied), 'deny');
+    const search_denied = resultOf(run(JSON.stringify(search)));
+    assert.equal(decision(search_denied), 'deny');
+    assert.match(JSON.stringify(search_denied), /content search of large file\.js.*head_limit/);
     assert.match(JSON.stringify(denied), /prompt-sift.*worker/);
     assert.doesNotMatch(JSON.stringify(denied), /prompt-sift read/);
     const args = host === 'copilot' ? payload.toolArgs : payload.tool_input;

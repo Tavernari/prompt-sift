@@ -65,3 +65,46 @@ test('binary files are never gated: the worker cannot summarise an image and the
   // The text gate itself is untouched.
   assert.equal(run('Read', { file_path: 'big.txt' }), 'deny');
 });
+
+test('an unbounded content search of one large file is a read in disguise; searches the host caps pass', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sift grep '));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.writeFile(path.join(root, 'Big.swift'), 'func a() {}\n'.repeat(500));
+  await fs.writeFile(path.join(root, 'small.swift'), 'func a() {}\n'.repeat(20));
+  await fs.mkdir(path.join(root, 'Sources'));
+  const run = (host, tool, args) => {
+    const result = spawnSync('/bin/sh', [runner, host], {
+      cwd: root, input: JSON.stringify({ cwd: root, tool_name: tool, tool_input: args }), encoding: 'utf8'
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    return out.permission ?? out.permissionDecision ?? out.hookSpecificOutput?.permissionDecision ?? 'allow';
+  };
+  for (const host of ['cursor', 'copilot', 'claude']) {
+    const pattern = '@Suite|@Test|func |private';
+    // Explicit content mode over one large file without a bound: denied everywhere, with the read message.
+    assert.equal(run(host, 'Grep', { pattern, path: 'Big.swift', output_mode: 'content' }), 'deny', host);
+    assert.equal(run(host, 'Grep', { pattern, path: 'Big.swift', output_mode: 'content', head_limit: 100 }), 'allow', host);
+    assert.equal(run(host, 'Grep', { pattern, path: 'Big.swift', output_mode: 'content', head_limit: 400 }), 'deny', host);
+    assert.equal(run(host, 'Grep', { pattern, path: 'Big.swift', output_mode: 'files_with_matches' }), 'allow', host);
+    assert.equal(run(host, 'Grep', { pattern, path: 'Big.swift', output_mode: 'count' }), 'allow', host);
+    assert.equal(run(host, 'Grep', { pattern, path: 'small.swift', output_mode: 'content' }), 'allow', host);
+    // Directories and missing paths are the host's own cap to enforce; the hook cannot measure them.
+    assert.equal(run(host, 'Grep', { pattern, path: 'Sources', output_mode: 'content' }), 'allow', host);
+    assert.equal(run(host, 'Grep', { pattern, output_mode: 'content' }), 'allow', host);
+    assert.equal(run(host, 'Grep', { pattern, path: 'missing.swift', output_mode: 'content' }), 'allow', host);
+    // Unknown argument shapes fail open.
+    assert.equal(run(host, 'Grep', { query: pattern, target: 'Big.swift' }), 'allow', host);
+  }
+  // Claude Code defaults output_mode to files_with_matches; Cursor and Copilot default to content.
+  assert.equal(run('claude', 'Grep', { pattern: 'func', path: 'Big.swift' }), 'allow');
+  assert.equal(run('cursor', 'Grep', { pattern: 'func', path: 'Big.swift' }), 'deny');
+  assert.equal(run('copilot', 'grep', { pattern: 'func', path: 'Big.swift' }), 'deny');
+  // head_limit 0 means unlimited on Claude Code, even over a directory.
+  assert.equal(run('claude', 'Grep', { pattern: 'func', path: 'Sources', output_mode: 'content', head_limit: 0 }), 'deny');
+  assert.equal(run('claude', 'Grep', { pattern: 'func', output_mode: 'content', head_limit: 0 }), 'deny');
+  const denied = spawnSync('/bin/sh', [runner, 'claude'], {
+    cwd: root, input: JSON.stringify({ cwd: root, tool_name: 'Grep', tool_input: { pattern: 'func', path: 'Big.swift', output_mode: 'content' } }), encoding: 'utf8'
+  });
+  assert.match(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecisionReason, /search of Big\.swift.*head_limit.*350/);
+});
