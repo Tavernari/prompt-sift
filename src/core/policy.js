@@ -44,7 +44,8 @@ export async function evaluatePolicy(payload, config) {
     if (limit !== null && limit <= config.maxTargetedLines) return { allow: true };
 
     const file = await inspectFile(path.resolve(cwd, filePath), config);
-    if (!file.readable || !file.large) return { allow: true };
+    // The host renders images and PDFs itself; a worker cannot summarise them.
+    if (!file.readable || file.binary || !file.large) return { allow: true };
     return {
       allow: false,
       path: file.path,
@@ -52,6 +53,25 @@ export async function evaluatePolicy(payload, config) {
       lines: file.lines,
       command: tool
     };
+  }
+
+  if (["grep", "rg"].includes(tool) && args.pattern !== undefined) {
+    // Only what can be measured is gated: a content-mode search of one large file with no bound
+    // under maxTargetedLines is that file's read in disguise. Directory searches are the host's
+    // own cap to enforce, except an explicit head_limit of 0, which Claude Code treats as unlimited.
+    const host = payload.host ?? "claude";
+    const mode = args.output_mode ?? (host === "claude" ? "files_with_matches" : "content");
+    if (mode !== "content") return { allow: true };
+    const head = args.head_limit;
+    if (Number.isInteger(head) && head > 0 && head <= config.maxTargetedLines) return { allow: true };
+    const filePath = firstDefined(args, ["path"]);
+    if (head === 0 && host === "claude") {
+      return { allow: false, path: filePath ? path.resolve(cwd, filePath) : cwd, bytes: 0, lines: 0, command: "grep" };
+    }
+    if (!filePath) return { allow: true };
+    const file = await inspectFile(path.resolve(cwd, filePath), config);
+    if (!file.readable || file.binary || !file.large) return { allow: true };
+    return { allow: false, path: file.path, bytes: file.bytes, lines: file.lines, command: "grep" };
   }
 
   if (["shell", "bash", "powershell"].includes(tool)) {
@@ -65,6 +85,9 @@ export async function evaluatePolicy(payload, config) {
 
 export function denialMessage(result, host) {
   const relative = path.relative(process.cwd(), result.path) || result.path;
+  if (result.command === "grep") {
+    return `PromptSift blocked an unbounded content search of ${relative}. Use output_mode files_with_matches or count, a bounded head_limit, a narrower path, or delegate orientation to prompt-sift-${host}-worker.`;
+  }
   return [
     `PromptSift blocked a broad read of ${relative} (${result.lines} lines, ${result.bytes} bytes).`,
     `Delegate orientation to prompt-sift-${host}-worker; it must use bounded reads of at most the configured maxTargetedLines and return a concise summary. Use prompt-sift-${host}-primary for complex reasoning.`,

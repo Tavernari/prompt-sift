@@ -4,9 +4,15 @@
     "preToolUse": [
       {
         "command": "/bin/sh \"${CURSOR_PLUGIN_ROOT}/runtime/hook.sh\" cursor || printf '%s\\n' '{\"permission\":\"allow\"}'",
-        "matcher": "Read|Shell",
+        "matcher": "Read|Shell|Grep",
         "timeout": 20,
         "failClosed": false
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "/bin/sh \"${CURSOR_PLUGIN_ROOT}/runtime/telemetry.sh\" cursor || printf '%s\\n' '{}'",
+        "timeout": 20
       }
     ]
   }

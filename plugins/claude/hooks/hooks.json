@@ -2,11 +2,22 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Bash",
+        "matcher": "Read|Bash|Grep",
         "hooks": [
           {
             "type": "command",
             "command": "/bin/sh \"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" claude || printf '%s\\n' '{}'",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh \"${CLAUDE_PLUGIN_ROOT}/runtime/telemetry.sh\" claude || printf '%s\\n' '{}'",
             "timeout": 20
           }
         ]
