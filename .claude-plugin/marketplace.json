@@ -7,7 +7,7 @@
     {
       "name": "prompt-sift",
       "source": "./plugins/claude",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "description": "Save primary context with native model-pinned subagents and bounded-read hooks."
     }
   ]

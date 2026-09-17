@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-09-17
 
 - The README now leads with the plugins: install, what the hook denies and why, the worker contract, the escalating reminder and how to measure the saving, in about a hundred lines. The npm installer and the external API worker (`read`, `write`, `inspect`, `stats`) are documented as legacy in `docs/EXTERNAL_API_MODE.md`, still tested and still useful for a worker outside the host's model access; `prompt-sift --help` says the same and lists the plugin install first.
 
