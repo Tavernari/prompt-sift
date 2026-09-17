@@ -44,7 +44,8 @@ export async function evaluatePolicy(payload, config) {
     if (limit !== null && limit <= config.maxTargetedLines) return { allow: true };
 
     const file = await inspectFile(path.resolve(cwd, filePath), config);
-    if (!file.readable || !file.large) return { allow: true };
+    // The host renders images and PDFs itself; a worker cannot summarise them.
+    if (!file.readable || file.binary || !file.large) return { allow: true };
     return {
       allow: false,
       path: file.path,

@@ -60,7 +60,7 @@ for (const host of ['cursor', 'copilot', 'claude']) {
     assert.match(noJq.stderr, /unavailable/);
     const bin = path.join(temp, 'only shell utilities');
     await fs.mkdir(bin);
-    for (const utility of ['jq', 'awk', 'wc', 'head', 'dirname']) {
+    for (const utility of ['jq', 'awk', 'wc', 'head', 'tr', 'dirname']) {
       const executable = spawnSync('/bin/sh', ['-c', `command -v ${utility}`], { encoding: 'utf8' }).stdout.trim();
       await fs.symlink(executable, path.join(bin, utility));
     }

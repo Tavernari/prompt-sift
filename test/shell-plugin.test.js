@@ -45,3 +45,23 @@ test('POSIX hooks preserve file and shell policies without evaluating input', as
   assert.equal(run({ file_path: 'minified.js' }, 'Read', { PROMPT_SIFT_MAX_BYTES: '100' }), 'deny');
   assert.equal(run({ file_path: 'big file.txt' }, 'Read', { PROMPT_SIFT_MIN_LINES: 'invalid' }), 'allow');
 });
+
+test('binary files are never gated: the worker cannot summarise an image and the host renders it itself', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sift binary '));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  // A PNG-shaped payload well above maxBytes: NUL bytes in the header, no newlines at all.
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d]), Buffer.alloc(70000, 0xab)]);
+  await fs.writeFile(path.join(root, 'screenshot.png'), png);
+  await fs.writeFile(path.join(root, 'big.txt'), 'line\n'.repeat(500));
+  const run = (tool, args) => {
+    const result = spawnSync('/bin/sh', [runner, 'claude'], {
+      cwd: root, input: JSON.stringify({ cwd: root, tool_name: tool, tool_input: args }), encoding: 'utf8'
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout).hookSpecificOutput?.permissionDecision ?? 'allow';
+  };
+  assert.equal(run('Read', { file_path: 'screenshot.png' }), 'allow');
+  assert.equal(run('Bash', { command: 'cat screenshot.png' }), 'allow');
+  // The text gate itself is untouched.
+  assert.equal(run('Read', { file_path: 'big.txt' }), 'deny');
+});

@@ -87,3 +87,14 @@ test("host adapters emit their native deny schemas", async (t) => {
   assert.equal(copilot.permissionDecision, "deny");
   assert.match(copilot.permissionDecisionReason, /targeted read/);
 });
+
+test("binary files are never gated, however large they are", async (t) => {
+  const { root } = await fixture();
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const image = path.join(root, "screenshot.png");
+  await fs.writeFile(image, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0x0d]), Buffer.alloc(config.maxBytes + 1, 0xab)]));
+  const result = await evaluatePolicy({ tool_name: "Read", tool_input: { file_path: image }, cwd: root }, config);
+  assert.equal(result.allow, true);
+  const shell = await evaluatePolicy({ tool_name: "Bash", tool_input: { command: "cat screenshot.png" }, cwd: root }, config);
+  assert.equal(shell.allow, true);
+});

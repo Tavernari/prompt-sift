@@ -196,7 +196,7 @@ export async function evaluateShellCommand(command, config, cwd = process.cwd())
 
       for (const candidate of candidatePaths(args)) {
         const file = await inspectFile(path.resolve(cwd, candidate), config);
-        if (!file.readable) continue;
+        if (!file.readable || file.binary) continue;
         if (file.large) {
           return {
             allow: false,

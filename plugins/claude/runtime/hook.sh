@@ -15,7 +15,7 @@ unavailable() {
 }
 trap 'unavailable' HUP INT TERM
 case "$host" in cursor|copilot|claude) ;; *) allow ;; esac
-for utility in awk wc head dirname; do
+for utility in awk wc head tr dirname; do
   command -v "$utility" >/dev/null 2>&1 || {
     printf 'PromptSift: %s unavailable; native agents remain active, read enforcement is inactive.\n' "$utility" >&2
     allow
@@ -68,11 +68,19 @@ set -- $limits
 min_lines=$1
 max_bytes=$2
 max_targeted=$3
+is_binary() {
+  sample=$(head -c 8192 "$1" 2>/dev/null | wc -c) || return 1
+  stripped=$(head -c 8192 "$1" 2>/dev/null | tr -d '\000' | wc -c) || return 1
+  [ "$sample" -ne "$stripped" ]
+}
 is_large() {
   candidate=$1
   case "$candidate" in /*) ;; *) candidate=./$candidate ;; esac
   [ -f "$candidate" ] && [ -r "$candidate" ] || return 1
   bytes=$(wc -c < "$candidate" 2>/dev/null) || return 1
+  # Binary files (NUL in the first 8 KiB) are rendered by the host itself; a worker cannot
+  # summarise an image, so the text gate must never fire on them.
+  is_binary "$candidate" && return 1
   [ "$bytes" -gt "$max_bytes" ] && return 0
   # awk counts the last line even when the file has no trailing newline.
   lines=$(awk -v ceiling="$min_lines" 'NR > ceiling { print NR; exit } END { if (NR <= ceiling) print NR }' < "$candidate" 2>/dev/null) || return 1
