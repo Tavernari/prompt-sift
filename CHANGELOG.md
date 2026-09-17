@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `stats.sh` opens with a headline, "kept out of context: N% of requested bytes", where requested is what entered context plus what denials kept out, and `--by-session` breaks it down per conversation using the new `session` field. Denials with no results are reported as "the postToolUse hook is not running", never as a 100% saving. The README's Measuring section describes the method and quotes no percentage: the number is measured per installation, not claimed.
+
 - The oversized-result reminder escalates per session instead of repeating itself. Ledger rows now carry a `session` field, a `cksum` of the host's conversation id (never the id itself); the first oversized result gets the short reminder, the second states the running total of tokens over the limit, and the third and later name `prompt-sift-<host>-worker` and how to call it. The tally lives next to the ledger and is dropped with it; without `cksum` the key is empty and only the escalation is lost.
 
 - The shell recognizer now knows the dumpers that lost the most context while it looked at one path at a time. Files in one `cat` are summed (three 200-line files are a 600-line read) and globs are expanded by the hook, never by running the command. `git log -p` with no count is denied as unbounded; `git diff` and `git show` are sized with `git --numstat` (read-only, no pager, no index lock) and denied above `minLines` unless a summary flag, a pipe into a reducer or a blob path bounds them; `find ... -exec cat` and `xargs cat` are denied unless reduced. Same rules in `hook.sh` and in the installed JS policy.

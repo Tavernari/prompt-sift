@@ -218,8 +218,12 @@ Caches are stored with user-only permissions where supported. Cache and metrics 
 Read it with the bundled `context-stats` skill ("how much context did tools use in this project?") or directly:
 
 ```bash
-/bin/sh "<plugin-root>/runtime/stats.sh" --cwd "$PWD" [--since 2026-09-17T00:00:00Z]
+/bin/sh "<plugin-root>/runtime/stats.sh" --cwd "$PWD" [--since 2026-09-17T00:00:00Z] [--by-session]
 ```
+
+### Measuring what it saves
+
+The first line of `stats.sh` is the headline: **kept out of context: N% of requested bytes**, where requested is what entered context (every `postToolUse` result) plus what a denial kept out (the size of the file at deny time). `--by-session` breaks the same share down per conversation, so a session that leaned on the worker can be compared with one that did not. Two honesty rules are built in: denials with no results are reported as "the postToolUse hook is not running", never as a 100% saving, and the share is of *requested* bytes, not of the session's total tokens — the model's own output and the system prompt are outside what the hook can see. This README quotes no percentage because the number is yours to measure: run a real session with the plugin installed, then `stats.sh --by-session`. Denied bytes are an upper bound (the host would have capped some of them) and tokens are `bytes / 4`; treat both as directional.
 
 **External API mode:**
 
