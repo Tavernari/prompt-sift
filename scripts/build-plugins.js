@@ -55,7 +55,7 @@ export async function pluginFiles(root = repo) {
         preToolUse: [{ command, matcher: 'Read|Shell|Grep', timeout: 20, failClosed: false }],
         postToolUse: [{ command: ledger, timeout: 20 }]
       } };
-      put('rules/routing.mdc', '---\ndescription: Route context-heavy work to PromptSift native agents\nalwaysApply: true\n---\nUse the installed prompt-sift worker for bounded file orientation, returning a concise summary with source references. Use the code-writer skill and writer for predictable generation from an existing reference, and the primary specialist for complex reasoning and final diff review. Match the agent definitions by name in the host tool list; do not call an external CLI or API. Respect hooks and never delegate recursively.\n');
+      put('rules/routing.mdc', '---\ndescription: Route context-heavy work to PromptSift native agents\nalwaysApply: true\n---\nUse the installed prompt-sift worker for bounded file orientation, returning a concise summary with source references. Use the code-writer skill and writer for predictable generation from an existing reference, and the primary specialist for complex reasoning and final diff review. Match the agent definitions by name in the host tool list; do not call an external CLI or API. Edits stay in the parent: never delegate an in-place change to the worker (read-only, must refuse) or the writer (whole files only); make surgical edits yourself with the edit tool after a targeted read. Respect hooks and never delegate recursively.\n');
     } else {
       hooks = { version: 1, hooks: {
         preToolUse: [{ type: 'command', bash: command, matcher: 'view|bash|grep', timeoutSec: 20 }],
