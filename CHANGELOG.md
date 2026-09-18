@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The plugin runtime parses again on macOS. `/bin/sh` there is bash 3.2, whose parser rejects an unparenthesised `case` pattern inside `$( ... )`; the byte sum in the shell-dumper recognizer had one, so every hook call on a Mac failed with `syntax error near unexpected token ')'` and the 0.6.0 macOS CI job went red with it. The sum now goes through a `text_bytes` helper next to `text_lines`, and `test/shell-plugin.test.js` parses every runtime script under the `bash:3.2` Docker image wherever Docker can supply it.
+
 ## 0.6.0 — 2026-09-17
 
 - The README now leads with the plugins: install, what the hook denies and why, the worker contract, the escalating reminder and how to measure the saving, in about a hundred lines. The npm installer and the external API worker (`read`, `write`, `inspect`, `stats`) are documented as legacy in `docs/EXTERNAL_API_MODE.md`, still tested and still useful for a worker outside the host's model access; `prompt-sift --help` says the same and lists the plugin install first.

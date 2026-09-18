@@ -89,6 +89,15 @@ text_lines() {
   is_binary "$candidate" && { printf 0; return; }
   awk 'END { print NR }' < "$candidate" 2>/dev/null || printf 0
 }
+# Bytes a readable text file holds; 0 for anything else. Kept as a function on purpose: bash 3.2
+# (macOS /bin/sh) cannot parse an unparenthesised `case` pattern inside `$( ... )`.
+text_bytes() {
+  candidate=$1
+  case "$candidate" in /*) ;; *) candidate=./$candidate ;; esac
+  [ -f "$candidate" ] && [ -r "$candidate" ] || { printf 0; return; }
+  is_binary "$candidate" && { printf 0; return; }
+  wc -c < "$candidate" 2>/dev/null || printf 0
+}
 # Globs are expanded here, never by running the command: a pattern that matches nothing stays literal.
 expand_glob() {
   case "$1" in
@@ -137,10 +146,7 @@ shell_findings() {
         done)
         if [ -n "$large" ]; then printf 'large\t%s' "$large"; exit 0; fi
         lines_here=$(printf '%s\n' "$expanded" | while IFS= read -r match; do text_lines "$match"; printf '\n'; done | awk '{ n += $1 } END { print n + 0 }')
-        bytes_here=$(printf '%s\n' "$expanded" | while IFS= read -r match; do
-          case "$match" in /*) ;; *) match=./$match ;; esac
-          [ -f "$match" ] && [ -r "$match" ] && ! is_binary "$match" && wc -c < "$match" 2>/dev/null || printf 0; printf '\n'
-        done | awk '{ n += $1 } END { print n + 0 }')
+        bytes_here=$(printf '%s\n' "$expanded" | while IFS= read -r match; do text_bytes "$match"; printf '\n'; done | awk '{ n += $1 } END { print n + 0 }')
         count_here=$(printf '%s\n' "$expanded" | awk 'NF { n++ } END { print n + 0 }')
         sum_lines=$((sum_lines + lines_here)); sum_bytes=$((sum_bytes + bytes_here)); part_count=$((part_count + count_here))
         [ -n "$pattern" ] || names="${names:+$names, }$entry" ;;
