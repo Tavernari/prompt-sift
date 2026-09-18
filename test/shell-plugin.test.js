@@ -179,3 +179,13 @@ test('shell dumpers: sums, globs, git history and diffs, find -exec cat', async 
   // The hook never runs the inspected command: measuring the diff must not touch the index.
   assert.equal(git('status', '--porcelain').includes('??'), false);
 });
+
+// macOS ships bash 3.2 as /bin/sh, and its parser rejects an unparenthesised `case` pattern
+// inside `$( ... )` — a script that runs on every Linux shell can still fail to parse there.
+// The runtime must parse under 3.2 itself; the check runs wherever Docker can supply that bash.
+const bash32 = spawnSync('docker', ['image', 'inspect', 'bash:3.2'], { stdio: 'ignore' }).status === 0;
+test('the plugin runtime parses under bash 3.2, the macOS /bin/sh', { skip: !bash32 && 'needs the bash:3.2 Docker image' }, () => {
+  const dir = path.resolve(import.meta.dirname, '../scripts/plugin');
+  const result = spawnSync('docker', ['run', '--rm', '-v', `${dir}:/p:ro`, 'bash:3.2', 'sh', '-c', 'for f in /p/*.sh; do bash -n "$f" || exit 1; done'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+});
