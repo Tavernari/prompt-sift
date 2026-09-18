@@ -7,7 +7,7 @@
     {
       "name": "prompt-sift",
       "source": "./plugins/cursor",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "description": "Save primary context with native model-pinned subagents and bounded-read hooks."
     }
   ]

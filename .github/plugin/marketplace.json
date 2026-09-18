@@ -7,7 +7,7 @@
     {
       "name": "prompt-sift",
       "source": "./plugins/copilot",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "description": "Save primary context with native model-pinned subagents and bounded-read hooks."
     }
   ]
