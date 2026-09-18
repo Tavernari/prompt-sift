@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- The plugin runtime parses again on macOS. `/bin/sh` there is bash 3.2, whose parser rejects an unparenthesised `case` pattern inside `$( ... )`; the byte sum in the shell-dumper recognizer had one, so every hook call on a Mac failed with `syntax error near unexpected token ')'` and the 0.6.0 macOS CI job went red with it. The sum now goes through a `text_bytes` helper next to `text_lines`, and `test/shell-plugin.test.js` parses every runtime script under the `bash:3.2` Docker image wherever Docker can supply it.
+- The plugin runtime parses again on macOS. `/bin/sh` there is bash 3.2, whose parser rejects an unparenthesised `case` pattern inside `$( ... )`; the byte sum in the shell-dumper recognizer had one, so every hook call on a Mac failed with `syntax error near unexpected token ')'` and the 0.6.0 macOS CI job went red with it. The sum now goes through a `text_bytes` helper next to `text_lines`, and `test/shell-plugin.test.js` parses every runtime script under the `bash:3.2` Docker image wherever Docker can supply it. The same bash also refuses to split words on its own internal escape byte, `\001`, which the shell recognizer used to separate `git diff`/`git show` arguments: on a Mac `git diff -- <path>` lost its path and an 1100-line diff was allowed. The separator is `\002` now, the 3.2 check covers the split, and the ledger row no longer prints a "No such file" line on stderr when the denied thing is a diff rather than a file.
 
 ## 0.6.0 — 2026-09-17
 

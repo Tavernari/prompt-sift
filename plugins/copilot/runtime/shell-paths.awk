@@ -32,7 +32,7 @@ function dumper(start,end,    cmd,i,v,s,patch,bounded,args,exec) {
         if(v ~ /^(--stat|--numstat|--shortstat|--name-only|--name-status|--dirstat|--summary|--no-patch|-s|--check|--raw|--quiet|--exit-code|--stat=.*|--dirstat=.*)$/) return 1
         if(v ~ /^(-p|--patch|-u|--no-stat|--color|--no-color)$/) continue
         if(s=="show" && v !~ /^-/ && v ~ /:/) return 1
-        args=args "\001" v }
+        args=args "\002" v }
       print "!git\t" s args
       return 1
     }

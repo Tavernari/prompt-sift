@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -188,4 +189,11 @@ test('the plugin runtime parses under bash 3.2, the macOS /bin/sh', { skip: !bas
   const dir = path.resolve(import.meta.dirname, '../scripts/plugin');
   const result = spawnSync('docker', ['run', '--rm', '-v', `${dir}:/p:ro`, 'bash:3.2', 'sh', '-c', 'for f in /p/*.sh; do bash -n "$f" || exit 1; done'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
+  // bash 3.2 also refuses to split words on its own internal escape bytes (\001 and \177): with them
+  // as the separator `git diff -- <path>` lost its arguments and a 1100-line diff was allowed on a Mac.
+  // The separator shell-paths.awk emits between git arguments must be one bash 3.2 splits on.
+  const awk = readFileSync(path.join(dir, 'shell-paths.awk'), 'utf8');
+  const [, separator] = awk.match(/args=args "\\(\d{3})" v/);
+  const split = spawnSync('docker', ['run', '--rm', 'bash:3.2', 'bash', '-c', `x="a$(printf '\\${separator}')b$(printf '\\${separator}')c"; IFS=$(printf '\\${separator}'); set -f; set -- $x; unset IFS; echo $#`], { encoding: 'utf8' });
+  assert.equal(split.stdout.trim(), '3', `bash 3.2 does not split on \\${separator}`);
 });
