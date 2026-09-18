@@ -109,7 +109,8 @@ expand_glob() {
 # git diff/show sized with --numstat: read-only, no pager, no index lock, and never the inspected command.
 git_changed_lines() {
   command -v git >/dev/null 2>&1 || return 1
-  IFS=$(printf '\001'); set -f; set -- $1; unset IFS
+  # \002, not \001: bash 3.2 (macOS /bin/sh) will not split on its internal escape byte.
+  IFS=$(printf '\002'); set -f; set -- $1; unset IFS
   subcommand=$1; shift
   if [ "$subcommand" = show ]; then set -- --format= "$@"; fi
   GIT_OPTIONAL_LOCKS=0 git --no-pager -c core.pager=cat "$subcommand" --numstat --no-ext-diff --no-color "$@" 2>/dev/null |
@@ -135,7 +136,7 @@ shell_findings() {
       "!git	"*)
         changed=$(git_changed_lines "${entry#*	}") || continue
         if [ "${changed:-0}" -gt "$min_lines" ]; then
-          printf 'diff\tgit %s: %s changed lines' "$(printf '%s' "${entry#*	}" | tr '\001' ' ')" "$changed"; exit 0
+          printf 'diff\tgit %s: %s changed lines' "$(printf '%s' "${entry#*	}" | tr '\002' ' ')" "$changed"; exit 0
         fi ;;
       *)
         case "$entry" in *[\*\?\[]*) pattern=$entry ;; esac
@@ -207,7 +208,7 @@ case "$tool" in
   *) allow ;;
 esac
 # Ledger row for the denial: size on disk is what would have entered the context, before any host cap.
-record deny "$host" "$cwd" "$tool" "$(wc -c < "$file" 2>/dev/null || printf 0)" "" "$(session_key "$host" "$(printf '%s' "$normalized" | jq -r '.session')" "$cwd")"
+record deny "$host" "$cwd" "$tool" "$(wc -c 2>/dev/null < "$file" || printf 0)" "" "$(session_key "$host" "$(printf '%s' "$normalized" | jq -r '.session')" "$cwd")"
 case "$tool:${kind-}" in
   grep:*|rg:*) message="PromptSift blocked an unbounded content search of $file. Use output_mode files_with_matches or count, a head_limit of at most $max_targeted, a narrower path, or delegate orientation to prompt-sift:prompt-sift-$host-worker." ;;
   *:unbounded) message="PromptSift blocked an unbounded dump: $file. Bound it (a count, a path, a pipe into head or grep) or delegate orientation to prompt-sift:prompt-sift-$host-worker." ;;
